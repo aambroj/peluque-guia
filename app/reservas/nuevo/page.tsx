@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { getBookingAvailability } from "@/lib/bookingAvailability";
+import {
+  buildBookingTimes,
+  isSlotStillAvailable,
+  normalizeDateToISO,
+} from "@/lib/availability";
 
 type Cliente = {
   id: number;
@@ -18,6 +24,25 @@ type Servicio = {
   id: number;
   name: string;
 };
+
+type DayStatus = {
+  tone: "gray" | "green" | "orange" | "red";
+  title: string;
+  detail: string;
+};
+
+function getDayStatusClasses(tone: DayStatus["tone"]) {
+  switch (tone) {
+    case "green":
+      return "border-green-200 bg-green-50 text-green-700";
+    case "orange":
+      return "border-orange-200 bg-orange-50 text-orange-700";
+    case "red":
+      return "border-red-200 bg-red-50 text-red-700";
+    default:
+      return "border-zinc-200 bg-zinc-50 text-zinc-600";
+  }
+}
 
 export default function NuevaReservaPage() {
   const router = useRouter();
@@ -37,14 +62,30 @@ export default function NuevaReservaPage() {
 
   const [loadingData, setLoadingData] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState("");
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [dayStatus, setDayStatus] = useState<DayStatus>({
+    tone: "gray",
+    title: "Sin comprobar",
+    detail: "Selecciona empleado, servicio y fecha.",
+  });
 
   useEffect(() => {
     const fetchData = async () => {
       const [clientesRes, empleadosRes, serviciosRes] = await Promise.all([
-        supabase.from("clientes").select("id, name").order("name", { ascending: true }),
-        supabase.from("empleados").select("id, name").order("name", { ascending: true }),
-        supabase.from("servicios").select("id, name").order("name", { ascending: true }),
+        supabase
+          .from("clientes")
+          .select("id, name")
+          .order("name", { ascending: true }),
+        supabase
+          .from("empleados")
+          .select("id, name")
+          .order("name", { ascending: true }),
+        supabase
+          .from("servicios")
+          .select("id, name")
+          .order("name", { ascending: true }),
       ]);
 
       if (clientesRes.error || empleadosRes.error || serviciosRes.error) {
@@ -67,10 +108,112 @@ export default function NuevaReservaPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const loadAvailability = async () => {
+      if (!form.employee_id || !form.service_id || !form.date) {
+        setAvailableSlots([]);
+        setForm((prev) => ({ ...prev, time: "" }));
+        setDayStatus({
+          tone: "gray",
+          title: "Sin comprobar",
+          detail: "Selecciona empleado, servicio y fecha.",
+        });
+        return;
+      }
+
+      setLoadingSlots(true);
+      setError("");
+
+      try {
+        const result = await getBookingAvailability({
+          supabase,
+          employeeId: Number(form.employee_id),
+          serviceId: Number(form.service_id),
+          date: form.date,
+        });
+
+        setAvailableSlots(result.availableSlots);
+
+        setForm((prev) => {
+          const currentTimeIsValid =
+            prev.time && result.availableSlots.includes(prev.time);
+
+          return {
+            ...prev,
+            time: currentTimeIsValid ? prev.time : "",
+          };
+        });
+
+        const hasFullDayBlock = result.timeOff.some((item) => item.is_full_day);
+        const hasPartialBlocks = result.timeOff.some((item) => !item.is_full_day);
+        const hasBookings = result.bookings.some(
+          (item) => item.status?.toLowerCase() !== "cancelada"
+        );
+
+        if (!result.schedule) {
+          setDayStatus({
+            tone: "red",
+            title: "Sin horario",
+            detail: "Ese empleado no tiene horario configurado para ese día.",
+          });
+        } else if (!result.schedule.is_working) {
+          setDayStatus({
+            tone: "red",
+            title: "No trabaja",
+            detail: "Ese empleado no trabaja ese día.",
+          });
+        } else if (hasFullDayBlock) {
+          setDayStatus({
+            tone: "red",
+            title: "Día bloqueado",
+            detail: "El día está bloqueado completo para ese empleado.",
+          });
+        } else if (result.availableSlots.length === 0) {
+          setDayStatus({
+            tone: "red",
+            title: "Completo",
+            detail: "No quedan huecos disponibles para ese servicio.",
+          });
+        } else if (!hasBookings && !hasPartialBlocks) {
+          setDayStatus({
+            tone: "green",
+            title: "Libre completo",
+            detail: "No hay reservas ni bloqueos en esa jornada.",
+          });
+        } else {
+          setDayStatus({
+            tone: "orange",
+            title: "Semiocupado",
+            detail: `Quedan ${result.availableSlots.length} huecos disponibles.`,
+          });
+        }
+      } catch (err) {
+        setAvailableSlots([]);
+        setForm((prev) => ({ ...prev, time: "" }));
+        setDayStatus({
+          tone: "red",
+          title: "Error",
+          detail: "No se pudo calcular la disponibilidad.",
+        });
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Error al calcular disponibilidad"
+        );
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    loadAvailability();
+  }, [form.employee_id, form.service_id, form.date]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+
+    setError("");
 
     setForm((prev) => ({
       ...prev,
@@ -83,26 +226,79 @@ export default function NuevaReservaPage() {
     setLoading(true);
     setError("");
 
-    const payload = {
-      client_id: form.client_id ? Number(form.client_id) : null,
-      employee_id: form.employee_id ? Number(form.employee_id) : null,
-      service_id: form.service_id ? Number(form.service_id) : null,
-      date: form.date,
-      time: form.time,
-      status: form.status,
-    };
+    try {
+      if (!form.client_id || !form.employee_id || !form.service_id) {
+        throw new Error("Debes seleccionar cliente, empleado y servicio.");
+      }
 
-    const { error } = await supabase.from("reservas").insert([payload]);
+      if (!form.date) {
+        throw new Error("Debes seleccionar una fecha.");
+      }
 
-    setLoading(false);
+      if (!form.time) {
+        throw new Error("Debes seleccionar una hora disponible.");
+      }
 
-    if (error) {
-      setError(error.message);
-      return;
+      const clientId = Number(form.client_id);
+      const employeeId = Number(form.employee_id);
+      const serviceId = Number(form.service_id);
+      const normalizedDate = normalizeDateToISO(form.date);
+
+      const availability = await getBookingAvailability({
+        supabase,
+        employeeId,
+        serviceId,
+        date: normalizedDate,
+      });
+
+      const stillAvailable = isSlotStillAvailable({
+        startTime: form.time,
+        serviceDurationMinutes: availability.serviceDurationMinutes,
+        schedule: availability.schedule,
+        bookings: availability.bookings,
+        timeOff: availability.timeOff,
+      });
+
+      if (!stillAvailable) {
+        setAvailableSlots(availability.availableSlots);
+        throw new Error(
+          "La hora seleccionada ya no está disponible. Elige otra."
+        );
+      }
+
+      const { start_time, end_time } = buildBookingTimes(
+        form.time,
+        availability.serviceDurationMinutes
+      );
+
+      const payload = {
+        client_id: clientId,
+        employee_id: employeeId,
+        service_id: serviceId,
+        date: normalizedDate,
+        time: start_time,
+        start_time,
+        end_time,
+        status: form.status,
+      };
+
+      const { error: insertError } = await supabase
+        .from("reservas")
+        .insert([payload]);
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+
+      router.push("/reservas");
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Error al guardar la reserva"
+      );
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/reservas");
-    router.refresh();
   };
 
   if (loadingData) {
@@ -114,6 +310,9 @@ export default function NuevaReservaPage() {
       </section>
     );
   }
+
+  const canCheckAvailability =
+    !!form.employee_id && !!form.service_id && !!form.date;
 
   return (
     <section className="px-6 py-8">
@@ -153,6 +352,7 @@ export default function NuevaReservaPage() {
                 name="employee_id"
                 value={form.employee_id}
                 onChange={handleChange}
+                required
                 className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black"
               >
                 <option value="">Selecciona un empleado</option>
@@ -184,6 +384,13 @@ export default function NuevaReservaPage() {
               </select>
             </div>
 
+            <div className="rounded-2xl border p-4 text-sm font-medium ${getDayStatusClasses(dayStatus.tone)}">
+              <div className={`rounded-2xl border p-4 ${getDayStatusClasses(dayStatus.tone)}`}>
+                <p className="font-semibold">{dayStatus.title}</p>
+                <p className="mt-1 text-sm">{dayStatus.detail}</p>
+              </div>
+            </div>
+
             <div className="grid gap-5 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-medium text-zinc-700">
@@ -201,16 +408,40 @@ export default function NuevaReservaPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-zinc-700">
-                  Hora
+                  Hora disponible
                 </label>
-                <input
+                <select
                   name="time"
-                  type="time"
                   value={form.time}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                />
+                  disabled={!canCheckAvailability || loadingSlots}
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black disabled:bg-zinc-100"
+                >
+                  <option value="">
+                    {!canCheckAvailability
+                      ? "Selecciona empleado, servicio y fecha"
+                      : loadingSlots
+                      ? "Calculando horas disponibles..."
+                      : availableSlots.length === 0
+                      ? "No hay horas disponibles"
+                      : "Selecciona una hora"}
+                  </option>
+
+                  {availableSlots.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot}
+                    </option>
+                  ))}
+                </select>
+
+                {canCheckAvailability && !loadingSlots ? (
+                  <p className="mt-2 text-sm text-zinc-500">
+                    {availableSlots.length > 0
+                      ? `${availableSlots.length} huecos disponibles para ese día.`
+                      : "Ese empleado no tiene huecos disponibles para ese servicio en esa fecha."}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -239,7 +470,7 @@ export default function NuevaReservaPage() {
             <div className="flex gap-3">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || loadingSlots}
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
               >
                 {loading ? "Guardando..." : "Guardar reserva"}

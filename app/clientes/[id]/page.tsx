@@ -5,35 +5,35 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-type Empleado = {
+type Cliente = {
   id: number;
   name: string;
-  role: string | null;
   phone: string | null;
-  status: string | null;
-  public_booking_enabled: boolean | null;
+  visits: number | null;
+  last_visit: string | null;
+  notes: string | null;
 };
 
-type EmpleadoForm = {
+type ClienteForm = {
   name: string;
-  role: string;
   phone: string;
-  status: string;
-  public_booking_enabled: boolean;
+  visits: string;
+  last_visit: string;
+  notes: string;
 };
 
-export default function EmpleadoDetallePage() {
+export default function ClienteDetallePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const employeeId = Number(params.id);
+  const clientId = Number(params.id);
 
-  const [empleado, setEmpleado] = useState<Empleado | null>(null);
-  const [form, setForm] = useState<EmpleadoForm>({
+  const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [form, setForm] = useState<ClienteForm>({
     name: "",
-    role: "",
     phone: "",
-    status: "Disponible",
-    public_booking_enabled: true,
+    visits: "0",
+    last_visit: "",
+    notes: "",
   });
 
   const [loading, setLoading] = useState(true);
@@ -42,9 +42,9 @@ export default function EmpleadoDetallePage() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const loadEmpleado = async () => {
-      if (!Number.isFinite(employeeId) || employeeId <= 0) {
-        setError("Empleado inválido.");
+    const loadCliente = async () => {
+      if (!Number.isFinite(clientId) || clientId <= 0) {
+        setError("Cliente inválido.");
         setLoading(false);
         return;
       }
@@ -54,43 +54,43 @@ export default function EmpleadoDetallePage() {
       setSuccess("");
 
       const { data, error } = await supabase
-        .from("empleados")
-        .select("id, name, role, phone, status, public_booking_enabled")
-        .eq("id", employeeId)
+        .from("clientes")
+        .select("id, name, phone, visits, last_visit, notes")
+        .eq("id", clientId)
         .maybeSingle();
 
       if (error) {
-        setError(error.message || "No se pudo cargar el empleado.");
+        setError(error.message || "No se pudo cargar el cliente.");
         setLoading(false);
         return;
       }
 
       if (!data) {
-        setError("No se encontró el empleado.");
+        setError("No se encontró el cliente.");
         setLoading(false);
         return;
       }
 
-      const empleadoData = data as Empleado;
-      setEmpleado(empleadoData);
+      const clienteData = data as Cliente;
+      setCliente(clienteData);
 
       setForm({
-        name: empleadoData.name ?? "",
-        role: empleadoData.role ?? "",
-        phone: empleadoData.phone ?? "",
-        status: empleadoData.status ?? "Disponible",
-        public_booking_enabled: empleadoData.public_booking_enabled ?? true,
+        name: clienteData.name ?? "",
+        phone: clienteData.phone ?? "",
+        visits: String(clienteData.visits ?? 0),
+        last_visit: clienteData.last_visit ?? "",
+        notes: clienteData.notes ?? "",
       });
 
       setLoading(false);
     };
 
-    loadEmpleado();
-  }, [employeeId]);
+    loadCliente();
+  }, [clientId]);
 
   const updateField = (
-    field: keyof EmpleadoForm,
-    value: string | boolean
+    field: keyof ClienteForm,
+    value: string
   ) => {
     setForm((prev) => ({
       ...prev,
@@ -103,7 +103,14 @@ export default function EmpleadoDetallePage() {
     setSuccess("");
 
     if (!form.name.trim()) {
-      setError("El nombre del empleado es obligatorio.");
+      setError("El nombre del cliente es obligatorio.");
+      return;
+    }
+
+    const visitsNumber = Number(form.visits);
+
+    if (!Number.isFinite(visitsNumber) || visitsNumber < 0) {
+      setError("El número de visitas no es válido.");
       return;
     }
 
@@ -111,39 +118,39 @@ export default function EmpleadoDetallePage() {
 
     const payload = {
       name: form.name.trim(),
-      role: form.role.trim() || null,
       phone: form.phone.trim() || null,
-      status: form.status.trim() || "Disponible",
-      public_booking_enabled: form.public_booking_enabled,
+      visits: visitsNumber,
+      last_visit: form.last_visit || null,
+      notes: form.notes.trim() || null,
     };
 
     const { data, error } = await supabase
-      .from("empleados")
+      .from("clientes")
       .update(payload)
-      .eq("id", employeeId)
-      .select("id, name, role, phone, status, public_booking_enabled")
+      .eq("id", clientId)
+      .select("id, name, phone, visits, last_visit, notes")
       .single();
 
     setSaving(false);
 
     if (error) {
-      setError(error.message || "No se pudo guardar el empleado.");
+      setError(error.message || "No se pudo guardar el cliente.");
       return;
     }
 
-    const updated = data as Empleado;
-    setEmpleado(updated);
+    const updated = data as Cliente;
+    setCliente(updated);
     setForm({
       name: updated.name ?? "",
-      role: updated.role ?? "",
       phone: updated.phone ?? "",
-      status: updated.status ?? "Disponible",
-      public_booking_enabled: updated.public_booking_enabled ?? true,
+      visits: String(updated.visits ?? 0),
+      last_visit: updated.last_visit ?? "",
+      notes: updated.notes ?? "",
     });
 
-    setSuccess("Datos del empleado guardados correctamente.");
+    setSuccess("Datos del cliente guardados correctamente.");
 
-    router.push("/empleados");
+    router.push("/clientes");
     router.refresh();
   };
 
@@ -151,7 +158,7 @@ export default function EmpleadoDetallePage() {
     return (
       <section className="px-6 py-8">
         <div className="mx-auto max-w-5xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          Cargando datos del empleado...
+          Cargando datos del cliente...
         </div>
       </section>
     );
@@ -164,36 +171,22 @@ export default function EmpleadoDetallePage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">
-                Editar empleado
+                Editar cliente
               </h1>
               <p className="mt-2 text-zinc-600">
                 Modifica los datos generales de{" "}
                 <span className="font-medium text-zinc-900">
-                  {empleado?.name ?? "este empleado"}
+                  {cliente?.name ?? "este cliente"}
                 </span>.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/empleados"
+                href="/clientes"
                 className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:border-black"
               >
-                Volver a empleados
-              </Link>
-
-              <Link
-                href={`/empleados/${employeeId}/horario`}
-                className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:border-black"
-              >
-                Ver horario
-              </Link>
-
-              <Link
-                href={`/empleados/${employeeId}/bloqueos`}
-                className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:border-black"
-              >
-                Ver bloqueos
+                Volver a clientes
               </Link>
 
               <button
@@ -230,19 +223,7 @@ export default function EmpleadoDetallePage() {
                 value={form.name}
                 onChange={(e) => updateField("name", e.target.value)}
                 className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                placeholder="Nombre del empleado"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700">
-                Rol
-              </label>
-              <input
-                value={form.role}
-                onChange={(e) => updateField("role", e.target.value)}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                placeholder="Ej. Estilista"
+                placeholder="Nombre del cliente"
               />
             </div>
 
@@ -260,33 +241,40 @@ export default function EmpleadoDetallePage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-zinc-700">
-                Estado
+                Visitas
               </label>
-              <select
-                value={form.status}
-                onChange={(e) => updateField("status", e.target.value)}
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black"
-              >
-                <option value="Disponible">Disponible</option>
-                <option value="Descanso">Descanso</option>
-                <option value="Vacaciones">Vacaciones</option>
-                <option value="Baja">Baja</option>
-                <option value="Inactivo">Inactivo</option>
-              </select>
+              <input
+                inputMode="numeric"
+                value={form.visits}
+                onChange={(e) => updateField("visits", e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-zinc-700">
+                Última visita
+              </label>
+              <input
+                type="date"
+                value={form.last_visit}
+                onChange={(e) => updateField("last_visit", e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+              />
             </div>
           </div>
 
           <div className="mt-6">
-            <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-700">
-              <input
-                type="checkbox"
-                checked={form.public_booking_enabled}
-                onChange={(e) =>
-                  updateField("public_booking_enabled", e.target.checked)
-                }
-              />
-              Permitir reserva online para este empleado
+            <label className="mb-2 block text-sm font-medium text-zinc-700">
+              Notas
             </label>
+            <textarea
+              rows={4}
+              value={form.notes}
+              onChange={(e) => updateField("notes", e.target.value)}
+              className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+              placeholder="Información adicional del cliente"
+            />
           </div>
         </div>
       </div>

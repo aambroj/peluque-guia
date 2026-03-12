@@ -1,135 +1,158 @@
-import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import DeleteEmpleadoButton from "@/components/DeleteEmpleadoButton";
-import { getStatusBadgeClasses } from "@/lib/utils";
+"use client";
 
-type EmpleadosPageProps = {
-  searchParams?: Promise<{
-    q?: string;
-  }>;
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+
+type Empleado = {
+  id: number;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  status: string | null;
+  public_booking_enabled?: boolean | null;
 };
 
-export default async function EmpleadosPage({
-  searchParams,
-}: EmpleadosPageProps) {
-  const params = (await searchParams) ?? {};
-  const q = params.q?.trim() ?? "";
+export default function EmpleadosPage() {
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  let query = supabase.from("empleados").select("*").order("id", { ascending: true });
+  useEffect(() => {
+    const loadEmpleados = async () => {
+      setLoading(true);
+      setError("");
 
-  if (q) {
-    query = query.or(
-      `name.ilike.%${q}%,role.ilike.%${q}%,phone.ilike.%${q}%,status.ilike.%${q}%`
+      const { data, error } = await supabase
+        .from("empleados")
+        .select("id, name, role, phone, status, public_booking_enabled")
+        .order("name", { ascending: true });
+
+      if (error) {
+        setError(error.message || "No se pudieron cargar los empleados.");
+        setLoading(false);
+        return;
+      }
+
+      setEmpleados((data ?? []) as Empleado[]);
+      setLoading(false);
+    };
+
+    loadEmpleados();
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="px-6 py-8">
+        <div className="mx-auto max-w-6xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          Cargando empleados...
+        </div>
+      </section>
     );
   }
 
-  const { data: empleados, error } = await query;
-
   return (
     <section className="px-6 py-8">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Empleados</h2>
-            <p className="mt-2 text-zinc-600">
-              Gestiona el equipo, turnos y estado del personal.
-            </p>
-          </div>
-
-          <Link
-            href="/empleados/nuevo"
-            className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            Nuevo empleado
-          </Link>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h3 className="text-xl font-semibold">Equipo</h3>
-              <p className="text-sm text-zinc-500">
-                Vista general del personal registrado
+              <h1 className="text-3xl font-bold tracking-tight">Empleados</h1>
+              <p className="mt-2 text-zinc-600">
+                Gestiona el equipo, sus datos, horarios semanales y sus bloqueos
+                o vacaciones.
               </p>
             </div>
 
-            <form className="flex gap-2">
-              <input
-                type="text"
-                name="q"
-                defaultValue={q}
-                placeholder="Buscar empleado..."
-                className="rounded-xl border border-zinc-300 px-4 py-2 text-sm outline-none focus:border-black"
-              />
-              <button className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100">
-                Buscar
-              </button>
-              {q ? (
-                <Link
-                  href="/empleados"
-                  className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100"
-                >
-                  Limpiar
-                </Link>
-              ) : null}
-            </form>
+            <Link
+              href="/empleados/nuevo"
+              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+            >
+              Nuevo empleado
+            </Link>
           </div>
-
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-              Error al cargar empleados: {error.message}
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-zinc-200">
-              <div className="grid grid-cols-6 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
-                <span>Nombre</span>
-                <span>Puesto</span>
-                <span>Teléfono</span>
-                <span>Horario</span>
-                <span>Estado</span>
-                <span>Acciones</span>
-              </div>
-
-              {empleados && empleados.length > 0 ? (
-                empleados.map((empleado) => (
-                  <div
-                    key={empleado.id}
-                    className="grid grid-cols-6 items-center border-t border-zinc-200 px-4 py-4 text-sm"
-                  >
-                    <span className="font-medium">{empleado.name}</span>
-                    <span>{empleado.role || "-"}</span>
-                    <span>{empleado.phone || "-"}</span>
-                    <span>{empleado.schedule || "-"}</span>
-                    <span>
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClasses(
-                          empleado.status
-                        )}`}
-                      >
-                        {empleado.status || "-"}
-                      </span>
-                    </span>
-
-                    <div className="flex gap-2">
-                      <Link
-                        href={`/empleados/editar/${empleado.id}`}
-                        className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
-                      >
-                        Editar
-                      </Link>
-
-                      <DeleteEmpleadoButton id={empleado.id} />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="px-4 py-6 text-sm text-zinc-500">
-                  No hay empleados que coincidan con la búsqueda.
-                </div>
-              )}
-            </div>
-          )}
         </div>
+
+        {error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+            {error}
+          </div>
+        ) : null}
+
+        {empleados.length === 0 ? (
+          <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm text-zinc-600">
+            No hay empleados registrados.
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {empleados.map((empleado) => (
+              <article
+                key={empleado.id}
+                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold">{empleado.name}</h2>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {empleado.role || "Profesional del salón"}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      empleado.status === "Descanso"
+                        ? "border border-orange-200 bg-orange-50 text-orange-700"
+                        : empleado.status === "Vacaciones" ||
+                          empleado.status === "Baja" ||
+                          empleado.status === "Inactivo"
+                        ? "border border-red-200 bg-red-50 text-red-700"
+                        : "border border-green-200 bg-green-50 text-green-700"
+                    }`}
+                  >
+                    {empleado.status || "Disponible"}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-2 text-sm text-zinc-600">
+                  <p>
+                    <span className="font-medium text-zinc-800">Teléfono:</span>{" "}
+                    {empleado.phone || "No indicado"}
+                  </p>
+
+                  <p>
+                    <span className="font-medium text-zinc-800">
+                      Reserva online:
+                    </span>{" "}
+                    {empleado.public_booking_enabled ? "Activa" : "Desactivada"}
+                  </p>
+                </div>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link
+                    href={`/empleados/${empleado.id}`}
+                    className="rounded-xl bg-black px-4 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                  >
+                    Editar datos
+                  </Link>
+
+                  <Link
+                    href={`/empleados/${empleado.id}/horario`}
+                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:border-black"
+                  >
+                    Horario
+                  </Link>
+
+                  <Link
+                    href={`/empleados/${empleado.id}/bloqueos`}
+                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:border-black"
+                  >
+                    Bloqueos / vacaciones
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
