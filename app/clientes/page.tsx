@@ -1,138 +1,138 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatDate } from "@/lib/utils";
 
-type Cliente = {
-  id: number;
-  name: string;
-  phone: string | null;
-  visits: number | null;
-  last_visit: string | null;
-  notes: string | null;
+type ClientesPageProps = {
+  searchParams?: Promise<{
+    q?: string;
+  }>;
 };
 
-function formatDate(date: string | null) {
-  if (!date) return "Sin fecha";
-  const [year, month, day] = date.split("-");
-  return `${day}/${month}/${year}`;
-}
+export default async function ClientesPage({
+  searchParams,
+}: ClientesPageProps) {
+  const params = (await searchParams) ?? {};
+  const q = params.q?.trim().toLowerCase() ?? "";
 
-export default function ClientesPage() {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data: clientes, error } = await supabase
+    .from("clientes")
+    .select("id, name, phone, visits, last_visit")
+    .order("name", { ascending: true });
 
-  useEffect(() => {
-    const loadClientes = async () => {
-      setLoading(true);
-      setError("");
+  const clientesFiltrados =
+    clientes?.filter((cliente) => {
+      if (!q) return true;
 
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("id, name, phone, visits, last_visit, notes")
-        .order("name", { ascending: true });
-
-      if (error) {
-        setError(error.message || "No se pudieron cargar los clientes.");
-        setLoading(false);
-        return;
-      }
-
-      setClientes((data ?? []) as Cliente[]);
-      setLoading(false);
-    };
-
-    loadClientes();
-  }, []);
-
-  if (loading) {
-    return (
-      <section className="px-6 py-8">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          Cargando clientes...
-        </div>
-      </section>
-    );
-  }
+      const texto = `${cliente.name ?? ""} ${cliente.phone ?? ""}`.toLowerCase();
+      return texto.includes(q);
+    }) ?? [];
 
   return (
     <section className="px-6 py-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-7xl space-y-8">
         <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+              <h2 className="text-3xl font-bold tracking-tight text-zinc-900">
+                Clientes
+              </h2>
               <p className="mt-2 text-zinc-600">
                 Gestiona los datos de tus clientes y su historial básico.
               </p>
             </div>
 
-            <Link
-              href="/clientes/nuevo"
-              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              Nuevo cliente
-            </Link>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/clientes/nuevo"
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Nuevo cliente
+              </Link>
+            </div>
           </div>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-            {error}
+        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-zinc-900">
+                Listado de clientes
+              </h3>
+              <p className="text-sm text-zinc-500">
+                Busca por nombre o teléfono
+              </p>
+            </div>
+
+            <form className="flex flex-wrap gap-2">
+              <input
+                type="text"
+                name="q"
+                defaultValue={params.q ?? ""}
+                placeholder="Buscar cliente..."
+                className="rounded-xl border border-zinc-300 px-4 py-2 text-sm outline-none focus:border-black"
+              />
+
+              <button className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100">
+                Filtrar
+              </button>
+
+              {q ? (
+                <Link
+                  href="/clientes"
+                  className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100"
+                >
+                  Limpiar
+                </Link>
+              ) : null}
+            </form>
           </div>
-        ) : null}
 
-        {clientes.length === 0 ? (
-          <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm text-zinc-600">
-            No hay clientes registrados.
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {clientes.map((cliente) => (
-              <article
-                key={cliente.id}
-                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
-              >
-                <div>
-                  <h2 className="text-xl font-semibold">{cliente.name}</h2>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    {cliente.phone || "Sin teléfono"}
-                  </p>
+          {error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              Error al cargar clientes: {error.message}
+            </div>
+          ) : clientesFiltrados.length > 0 ? (
+            <div className="overflow-hidden rounded-2xl border border-zinc-200">
+              <div className="grid grid-cols-5 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
+                <span>Nombre</span>
+                <span>Teléfono</span>
+                <span>Visitas</span>
+                <span>Última visita</span>
+                <span>Acciones</span>
+              </div>
+
+              {clientesFiltrados.map((cliente) => (
+                <div
+                  key={cliente.id}
+                  className="grid grid-cols-5 items-center border-t border-zinc-200 px-4 py-4 text-sm"
+                >
+                  <span className="font-medium text-zinc-900">
+                    {cliente.name}
+                  </span>
+                  <span>{cliente.phone || "-"}</span>
+                  <span>{cliente.visits ?? 0}</span>
+                  <span>
+                    {cliente.last_visit
+                      ? formatDate(cliente.last_visit)
+                      : "Sin visitas"}
+                  </span>
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/clientes/editar/${cliente.id}`}
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                    >
+                      Editar
+                    </Link>
+                  </div>
                 </div>
-
-                <div className="mt-4 space-y-2 text-sm text-zinc-600">
-                  <p>
-                    <span className="font-medium text-zinc-800">Visitas:</span>{" "}
-                    {cliente.visits ?? 0}
-                  </p>
-
-                  <p>
-                    <span className="font-medium text-zinc-800">
-                      Última visita:
-                    </span>{" "}
-                    {formatDate(cliente.last_visit)}
-                  </p>
-
-                  <p className="line-clamp-2">
-                    <span className="font-medium text-zinc-800">Notas:</span>{" "}
-                    {cliente.notes || "Sin notas"}
-                  </p>
-                </div>
-
-                <div className="mt-6">
-                  <Link
-                    href={`/clientes/${cliente.id}`}
-                    className="rounded-xl bg-black px-4 py-3 text-sm font-medium text-white transition hover:opacity-90 inline-flex"
-                  >
-                    Editar cliente
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-zinc-200 p-6 text-sm text-zinc-500">
+              No hay clientes registrados.
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );

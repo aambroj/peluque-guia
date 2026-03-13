@@ -1,90 +1,169 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-export default function EditarClientePage() {
-  const router = useRouter();
-  const params = useParams();
-  const id = Number(params.id);
+type EditarClientePageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+  searchParams?: Promise<{
+    error?: string;
+  }>;
+};
 
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    visits: 0,
-    last_visit: "",
-    notes: "",
-  });
+export default async function EditarClientePage({
+  params,
+  searchParams,
+}: EditarClientePageProps) {
+  const { id } = await params;
+  const search = (await searchParams) ?? {};
+  const errorMessage = search.error ?? "";
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const clienteId = Number(id);
 
-  useEffect(() => {
-    const fetchCliente = async () => {
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) {
-        setError(error.message);
-        setLoading(false);
-        return;
-      }
-
-      setForm({
-        name: data.name ?? "",
-        phone: data.phone ?? "",
-        visits: data.visits ?? 0,
-        last_visit: data.last_visit ?? "",
-        notes: data.notes ?? "",
-      });
-
-      setLoading(false);
-    };
-
-    if (!Number.isNaN(id)) {
-      fetchCliente();
-    }
-  }, [id]);
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: name === "visits" ? Number(value) : value,
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-
-    const { error } = await supabase.from("clientes").update(form).eq("id", id);
-
-    setSaving(false);
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    router.push("/clientes");
-    router.refresh();
-  };
-
-  if (loading) {
+  if (!Number.isFinite(clienteId)) {
     return (
       <section className="px-6 py-8">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          Cargando cliente...
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            ID de cliente no válido.
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  async function updateCliente(formData: FormData) {
+    "use server";
+
+    const clienteIdValue = Number(formData.get("cliente_id"));
+    const name = String(formData.get("name") ?? "").trim();
+    const phone = String(formData.get("phone") ?? "").trim();
+    const visits = Number(formData.get("visits") ?? 0);
+    const last_visit = String(formData.get("last_visit") ?? "").trim();
+
+    if (!Number.isFinite(clienteIdValue)) {
+      redirect(`/clientes/editar/${id}?error=ID+de+cliente+no+v%C3%A1lido`);
+    }
+
+    if (!name) {
+      redirect(`/clientes/editar/${id}?error=El+nombre+es+obligatorio`);
+    }
+
+    if (!phone) {
+      redirect(`/clientes/editar/${id}?error=El+tel%C3%A9fono+es+obligatorio`);
+    }
+
+    if (!Number.isFinite(visits) || visits < 0) {
+      redirect(`/clientes/editar/${id}?error=El+campo+visitas+no+es+v%C3%A1lido`);
+    }
+
+    const { data: otroCliente, error: otroClienteError } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq("phone", phone)
+      .neq("id", clienteIdValue)
+      .maybeSingle();
+
+    if (otroClienteError) {
+      redirect(
+        `/clientes/editar/${id}?error=${encodeURIComponent(
+          otroClienteError.message
+        )}`
+      );
+    }
+
+    if (otroCliente) {
+      redirect(
+        `/clientes/editar/${id}?error=Ya+existe+otro+cliente+con+ese+tel%C3%A9fono`
+      );
+    }
+
+    const { error } = await supabase
+      .from("clientes")
+      .update({
+        name,
+        phone,
+        visits,
+        last_visit: last_visit || null,
+      })
+      .eq("id", clienteIdValue);
+
+    if (error) {
+      redirect(
+        `/clientes/editar/${id}?error=${encodeURIComponent(error.message)}`
+      );
+    }
+
+    revalidatePath("/clientes");
+    revalidatePath("/dashboard");
+    revalidatePath(`/clientes/editar/${id}`);
+
+    redirect("/clientes");
+  }
+
+  const { data: cliente, error } = await supabase
+    .from("clientes")
+    .select("id, name, phone, visits, last_visit")
+    .eq("id", clienteId)
+    .maybeSingle();
+
+  if (error) {
+    return (
+      <section className="px-6 py-8">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight text-zinc-900">
+                Editar cliente
+              </h2>
+              <p className="mt-2 text-zinc-600">
+                No se pudo cargar el cliente.
+              </p>
+            </div>
+
+            <Link
+              href="/clientes"
+              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+            >
+              Volver
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error.message}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!cliente) {
+    return (
+      <section className="px-6 py-8">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight text-zinc-900">
+                Editar cliente
+              </h2>
+              <p className="mt-2 text-zinc-600">
+                El cliente solicitado no existe.
+              </p>
+            </div>
+
+            <Link
+              href="/clientes"
+              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+            >
+              Volver
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+            No se encontró el cliente que intentas editar.
+          </div>
         </div>
       </section>
     );
@@ -92,91 +171,119 @@ export default function EditarClientePage() {
 
   return (
     <section className="px-6 py-8">
-      <div className="mx-auto max-w-3xl">
-        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <h2 className="text-3xl font-bold tracking-tight">Editar cliente</h2>
-          <p className="mt-2 text-zinc-600">
-            Modifica los datos del cliente seleccionado.
-          </p>
+      <div className="mx-auto max-w-3xl space-y-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-900">
+              Editar cliente
+            </h2>
+            <p className="mt-2 text-zinc-600">
+              Modifica los datos del cliente seleccionado.
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <Link
+            href="/clientes"
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+          >
+            Volver a clientes
+          </Link>
+        </div>
+
+        {errorMessage ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <form action={updateCliente} className="space-y-6">
+            <input type="hidden" name="cliente_id" value={cliente.id} />
+
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700">
+              <label
+                htmlFor="name"
+                className="mb-2 block text-sm font-medium text-zinc-700"
+              >
                 Nombre
               </label>
               <input
+                id="name"
                 name="name"
-                value={form.name}
-                onChange={handleChange}
+                type="text"
+                defaultValue={cliente.name ?? ""}
                 required
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder="Nombre del cliente"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700">
+              <label
+                htmlFor="phone"
+                className="mb-2 block text-sm font-medium text-zinc-700"
+              >
                 Teléfono
               </label>
               <input
+                id="phone"
                 name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                type="text"
+                defaultValue={cliente.phone ?? ""}
+                required
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder="Teléfono del cliente"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700">
+              <label
+                htmlFor="visits"
+                className="mb-2 block text-sm font-medium text-zinc-700"
+              >
                 Visitas
               </label>
               <input
+                id="visits"
                 name="visits"
                 type="number"
-                value={form.visits}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                min="0"
+                defaultValue={cliente.visits ?? 0}
+                required
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700">
+              <label
+                htmlFor="last_visit"
+                className="mb-2 block text-sm font-medium text-zinc-700"
+              >
                 Última visita
               </label>
               <input
+                id="last_visit"
                 name="last_visit"
-                value={form.last_visit}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                type="date"
+                defaultValue={cliente.last_visit ?? ""}
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700">
-                Notas
-              </label>
-              <textarea
-                name="notes"
-                value={form.notes}
-                onChange={handleChange}
-                rows={4}
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-              />
-            </div>
-
-            {error ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-                {error}
-              </div>
-            ) : null}
-
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={saving}
-                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
               >
-                {saving ? "Guardando..." : "Guardar cambios"}
+                Guardar cambios
               </button>
+
+              <Link
+                href="/clientes"
+                className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+              >
+                Cancelar
+              </Link>
             </div>
           </form>
         </div>

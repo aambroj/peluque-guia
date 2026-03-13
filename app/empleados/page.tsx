@@ -1,66 +1,42 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Empleado = {
-  id: number;
-  name: string;
-  role: string | null;
-  phone: string | null;
-  status: string | null;
-  public_booking_enabled?: boolean | null;
+type EmpleadosPageProps = {
+  searchParams?: Promise<{
+    q?: string;
+  }>;
 };
 
-export default function EmpleadosPage() {
-  const [empleados, setEmpleados] = useState<Empleado[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+export default async function EmpleadosPage({
+  searchParams,
+}: EmpleadosPageProps) {
+  const params = (await searchParams) ?? {};
+  const q = params.q?.trim().toLowerCase() ?? "";
 
-  useEffect(() => {
-    const loadEmpleados = async () => {
-      setLoading(true);
-      setError("");
+  const { data: empleados, error } = await supabase
+    .from("empleados")
+    .select("*")
+    .order("name", { ascending: true });
 
-      const { data, error } = await supabase
-        .from("empleados")
-        .select("id, name, role, phone, status, public_booking_enabled")
-        .order("name", { ascending: true });
+  const empleadosFiltrados =
+    empleados?.filter((empleado) => {
+      if (!q) return true;
 
-      if (error) {
-        setError(error.message || "No se pudieron cargar los empleados.");
-        setLoading(false);
-        return;
-      }
-
-      setEmpleados((data ?? []) as Empleado[]);
-      setLoading(false);
-    };
-
-    loadEmpleados();
-  }, []);
-
-  if (loading) {
-    return (
-      <section className="px-6 py-8">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          Cargando empleados...
-        </div>
-      </section>
-    );
-  }
+      const texto = `${empleado.name ?? ""} ${empleado.role ?? ""} ${empleado.phone ?? ""} ${empleado.status ?? ""}`.toLowerCase();
+      return texto.includes(q);
+    }) ?? [];
 
   return (
     <section className="px-6 py-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-7xl space-y-8">
         <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Empleados</h1>
+              <h2 className="text-3xl font-bold tracking-tight text-zinc-900">
+                Empleados
+              </h2>
               <p className="mt-2 text-zinc-600">
-                Gestiona el equipo, sus datos, horarios semanales y sus bloqueos
-                o vacaciones.
+                Gestiona el equipo, sus datos generales y el acceso a su ficha.
               </p>
             </div>
 
@@ -73,86 +49,84 @@ export default function EmpleadosPage() {
           </div>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-            {error}
-          </div>
-        ) : null}
+        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-zinc-900">
+                Listado de empleados
+              </h3>
+              <p className="text-sm text-zinc-500">
+                Busca por nombre, rol, teléfono o estado
+              </p>
+            </div>
 
-        {empleados.length === 0 ? (
-          <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm text-zinc-600">
-            No hay empleados registrados.
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {empleados.map((empleado) => (
-              <article
-                key={empleado.id}
-                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-semibold">{empleado.name}</h2>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      {empleado.role || "Profesional del salón"}
-                    </p>
-                  </div>
+            <form className="flex flex-wrap gap-2">
+              <input
+                type="text"
+                name="q"
+                defaultValue={params.q ?? ""}
+                placeholder="Buscar empleado..."
+                className="rounded-xl border border-zinc-300 px-4 py-2 text-sm outline-none focus:border-black"
+              />
 
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      empleado.status === "Descanso"
-                        ? "border border-orange-200 bg-orange-50 text-orange-700"
-                        : empleado.status === "Vacaciones" ||
-                          empleado.status === "Baja" ||
-                          empleado.status === "Inactivo"
-                        ? "border border-red-200 bg-red-50 text-red-700"
-                        : "border border-green-200 bg-green-50 text-green-700"
-                    }`}
-                  >
-                    {empleado.status || "Disponible"}
+              <button className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100">
+                Filtrar
+              </button>
+
+              {q ? (
+                <Link
+                  href="/empleados"
+                  className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100"
+                >
+                  Limpiar
+                </Link>
+              ) : null}
+            </form>
+          </div>
+
+          {error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              Error al cargar empleados: {error.message}
+            </div>
+          ) : empleadosFiltrados.length > 0 ? (
+            <div className="overflow-hidden rounded-2xl border border-zinc-200">
+              <div className="grid grid-cols-5 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
+                <span>Nombre</span>
+                <span>Rol</span>
+                <span>Teléfono</span>
+                <span>Estado</span>
+                <span>Acciones</span>
+              </div>
+
+              {empleadosFiltrados.map((empleado) => (
+                <div
+                  key={empleado.id}
+                  className="grid grid-cols-5 items-center border-t border-zinc-200 px-4 py-4 text-sm"
+                >
+                  <span className="font-medium text-zinc-900">
+                    {empleado.name ?? "-"}
                   </span>
+                  <span>{empleado.role ?? "-"}</span>
+                  <span>{empleado.phone ?? "-"}</span>
+                  <span>{empleado.status ?? "-"}</span>
+
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/empleados/editar/${empleado.id}`}
+                      className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                    >
+                      Editar
+                    </Link>
+                  </div>
                 </div>
-
-                <div className="mt-4 space-y-2 text-sm text-zinc-600">
-                  <p>
-                    <span className="font-medium text-zinc-800">Teléfono:</span>{" "}
-                    {empleado.phone || "No indicado"}
-                  </p>
-
-                  <p>
-                    <span className="font-medium text-zinc-800">
-                      Reserva online:
-                    </span>{" "}
-                    {empleado.public_booking_enabled ? "Activa" : "Desactivada"}
-                  </p>
-                </div>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Link
-                    href={`/empleados/${empleado.id}`}
-                    className="rounded-xl bg-black px-4 py-3 text-sm font-medium text-white transition hover:opacity-90"
-                  >
-                    Editar datos
-                  </Link>
-
-                  <Link
-                    href={`/empleados/${empleado.id}/horario`}
-                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:border-black"
-                  >
-                    Horario
-                  </Link>
-
-                  <Link
-                    href={`/empleados/${empleado.id}/bloqueos`}
-                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:border-black"
-                  >
-                    Bloqueos / vacaciones
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-zinc-200 p-6 text-sm text-zinc-500">
+              No hay empleados registrados.
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );

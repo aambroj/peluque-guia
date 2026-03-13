@@ -1,138 +1,147 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-type Cliente = {
-  id: number;
-  name: string;
-  phone: string | null;
-  visits: number | null;
-  last_visit: string | null;
-  notes: string | null;
+type NuevoClientePageProps = {
+  searchParams?: Promise<{
+    error?: string;
+  }>;
 };
 
-function formatDate(date: string | null) {
-  if (!date) return "Sin fecha";
-  const [year, month, day] = date.split("-");
-  return `${day}/${month}/${year}`;
-}
+export default async function NuevoClientePage({
+  searchParams,
+}: NuevoClientePageProps) {
+  const params = (await searchParams) ?? {};
+  const errorMessage = params.error ?? "";
 
-export default function ClientesPage() {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  async function createCliente(formData: FormData) {
+    "use server";
 
-  useEffect(() => {
-    const loadClientes = async () => {
-      setLoading(true);
-      setError("");
+    const name = String(formData.get("name") ?? "").trim();
+    const phone = String(formData.get("phone") ?? "").trim();
 
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("id, name, phone, visits, last_visit, notes")
-        .order("name", { ascending: true });
+    if (!name) {
+      redirect("/clientes/nuevo?error=El+nombre+es+obligatorio");
+    }
 
-      if (error) {
-        setError(error.message || "No se pudieron cargar los clientes.");
-        setLoading(false);
-        return;
-      }
+    if (!phone) {
+      redirect("/clientes/nuevo?error=El+tel%C3%A9fono+es+obligatorio");
+    }
 
-      setClientes((data ?? []) as Cliente[]);
-      setLoading(false);
-    };
+    const { data: clienteExistente, error: clienteExistenteError } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq("phone", phone)
+      .maybeSingle();
 
-    loadClientes();
-  }, []);
+    if (clienteExistenteError) {
+      redirect(
+        `/clientes/nuevo?error=${encodeURIComponent(clienteExistenteError.message)}`
+      );
+    }
 
-  if (loading) {
-    return (
-      <section className="px-6 py-8">
-        <div className="mx-auto max-w-6xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          Cargando clientes...
-        </div>
-      </section>
-    );
+    if (clienteExistente) {
+      redirect("/clientes/nuevo?error=Ya+existe+un+cliente+con+ese+tel%C3%A9fono");
+    }
+
+    const { error } = await supabase.from("clientes").insert({
+      name,
+      phone,
+      visits: 0,
+      last_visit: null,
+    });
+
+    if (error) {
+      redirect(`/clientes/nuevo?error=${encodeURIComponent(error.message)}`);
+    }
+
+    revalidatePath("/clientes");
+    revalidatePath("/dashboard");
+
+    redirect("/clientes");
   }
 
   return (
     <section className="px-6 py-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
-              <p className="mt-2 text-zinc-600">
-                Gestiona los datos de tus clientes y su historial básico.
-              </p>
-            </div>
-
-            <Link
-              href="/clientes/nuevo"
-              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-            >
+      <div className="mx-auto max-w-3xl space-y-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-900">
               Nuevo cliente
-            </Link>
+            </h2>
+            <p className="mt-2 text-zinc-600">
+              Añade un cliente nuevo a la base de datos de la peluquería.
+            </p>
           </div>
+
+          <Link
+            href="/clientes"
+            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+          >
+            Volver a clientes
+          </Link>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-            {error}
+        {errorMessage ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {errorMessage}
           </div>
         ) : null}
 
-        {clientes.length === 0 ? (
-          <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm text-zinc-600">
-            No hay clientes registrados.
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {clientes.map((cliente) => (
-              <article
-                key={cliente.id}
-                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
+        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <form action={createCliente} className="space-y-6">
+            <div>
+              <label
+                htmlFor="name"
+                className="mb-2 block text-sm font-medium text-zinc-700"
               >
-                <div>
-                  <h2 className="text-xl font-semibold">{cliente.name}</h2>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    {cliente.phone || "Sin teléfono"}
-                  </p>
-                </div>
+                Nombre
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder="Nombre del cliente"
+              />
+            </div>
 
-                <div className="mt-4 space-y-2 text-sm text-zinc-600">
-                  <p>
-                    <span className="font-medium text-zinc-800">Visitas:</span>{" "}
-                    {cliente.visits ?? 0}
-                  </p>
+            <div>
+              <label
+                htmlFor="phone"
+                className="mb-2 block text-sm font-medium text-zinc-700"
+              >
+                Teléfono
+              </label>
+              <input
+                id="phone"
+                name="phone"
+                type="text"
+                required
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
+                placeholder="Teléfono del cliente"
+              />
+            </div>
 
-                  <p>
-                    <span className="font-medium text-zinc-800">
-                      Última visita:
-                    </span>{" "}
-                    {formatDate(cliente.last_visit)}
-                  </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Guardar cliente
+              </button>
 
-                  <p className="line-clamp-2">
-                    <span className="font-medium text-zinc-800">Notas:</span>{" "}
-                    {cliente.notes || "Sin notas"}
-                  </p>
-                </div>
-
-                <div className="mt-6">
-                  <Link
-                    href={`/clientes/${cliente.id}`}
-                    className="rounded-xl bg-black px-4 py-3 text-sm font-medium text-white transition hover:opacity-90 inline-flex"
-                  >
-                    Editar cliente
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
+              <Link
+                href="/clientes"
+                className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+              >
+                Cancelar
+              </Link>
+            </div>
+          </form>
+        </div>
       </div>
     </section>
   );

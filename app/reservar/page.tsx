@@ -6,12 +6,16 @@ import { supabase } from "@/lib/supabase";
 
 type EmpleadoPublico = {
   id: number;
-  name: string;
+  name: string | null;
   role: string | null;
   phone: string | null;
   status: string | null;
-  public_booking_enabled: boolean;
+  public_booking_enabled: boolean | null;
 };
+
+function normalizeStatus(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
 
 export default function ReservarPage() {
   const [empleados, setEmpleados] = useState<EmpleadoPublico[]>([]);
@@ -26,8 +30,6 @@ export default function ReservarPage() {
       const { data, error } = await supabase
         .from("empleados")
         .select("id, name, role, phone, status, public_booking_enabled")
-        .eq("public_booking_enabled", true)
-        .neq("status", "Descanso")
         .order("name", { ascending: true });
 
       if (error) {
@@ -36,7 +38,16 @@ export default function ReservarPage() {
         return;
       }
 
-      setEmpleados((data ?? []) as EmpleadoPublico[]);
+      const rows = (data ?? []) as EmpleadoPublico[];
+
+      const visibles = rows.filter((empleado) => {
+        const status = normalizeStatus(empleado.status);
+        const canBook = empleado.public_booking_enabled === true;
+
+        return canBook && status !== "descanso" && status !== "vacaciones";
+      });
+
+      setEmpleados(visibles);
       setLoading(false);
     };
 
@@ -77,7 +88,9 @@ export default function ReservarPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold">{empleado.name}</h2>
+                    <h2 className="text-xl font-semibold">
+                      {empleado.name || "Profesional"}
+                    </h2>
                     <p className="mt-1 text-sm text-zinc-500">
                       {empleado.role || "Profesional del salón"}
                     </p>
