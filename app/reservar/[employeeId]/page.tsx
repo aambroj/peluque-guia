@@ -13,6 +13,8 @@ type Servicio = {
 type Empleado = {
   id: number;
   name: string;
+  status?: string | null;
+  public_booking_enabled?: boolean | null;
 };
 
 type DayColor = "green" | "orange" | "red";
@@ -69,6 +71,23 @@ type CalendarCell =
     };
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function normalizeStatus(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function isEmployeePublicBookable(employee: Empleado | null) {
+  if (!employee) return false;
+
+  const status = normalizeStatus(employee.status);
+
+  return (
+    employee.public_booking_enabled === true &&
+    status !== "descanso" &&
+    status !== "vacaciones" &&
+    status !== "inactivo"
+  );
+}
 
 function getTodayMonth() {
   const now = new Date();
@@ -214,7 +233,7 @@ export default function PublicEmployeeBookingPage() {
         const [employeeRes, servicesRes] = await Promise.all([
           supabase
             .from("empleados")
-            .select("id, name")
+            .select("id, name, status, public_booking_enabled")
             .eq("id", employeeId)
             .eq("public_booking_enabled", true)
             .maybeSingle(),
@@ -233,13 +252,15 @@ export default function PublicEmployeeBookingPage() {
           throw new Error(servicesRes.error.message);
         }
 
-        if (!employeeRes.data) {
+        const loadedEmployee = employeeRes.data as Empleado | null;
+
+        if (!loadedEmployee || !isEmployeePublicBookable(loadedEmployee)) {
           throw new Error("Empleado no disponible para reservas públicas.");
         }
 
         const loadedServices = (servicesRes.data ?? []) as Servicio[];
 
-        setEmployee(employeeRes.data as Empleado);
+        setEmployee(loadedEmployee);
         setServices(loadedServices);
 
         if (loadedServices.length > 0) {
@@ -264,7 +285,7 @@ export default function PublicEmployeeBookingPage() {
 
   useEffect(() => {
     const loadMonth = async () => {
-      if (!serviceId) return;
+      if (!serviceId || !employee || !isEmployeePublicBookable(employee)) return;
 
       setLoadingMonth(true);
       setError("");
@@ -311,11 +332,11 @@ export default function PublicEmployeeBookingPage() {
     };
 
     loadMonth();
-  }, [employeeId, serviceId, month, selectedDate]);
+  }, [employeeId, employee, serviceId, month, selectedDate]);
 
   useEffect(() => {
     const loadDay = async () => {
-      if (!serviceId || !selectedDate) {
+      if (!serviceId || !selectedDate || !employee || !isEmployeePublicBookable(employee)) {
         setDaySlots([]);
         setDaySummary(null);
         setSelectedTime("");
@@ -380,7 +401,7 @@ export default function PublicEmployeeBookingPage() {
     };
 
     loadDay();
-  }, [employeeId, serviceId, selectedDate]);
+  }, [employeeId, employee, serviceId, selectedDate]);
 
   const selectedDayFromMonth = useMemo(
     () => monthDays.find((item) => item.date === selectedDate) ?? null,
@@ -394,127 +415,144 @@ export default function PublicEmployeeBookingPage() {
 
   const canGoToPreviousMonth = month > getTodayMonth();
 
- const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setSaving(true);
-  setError("");
-  setSuccess("");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    setSuccess("");
 
-  try {
-    if (!serviceId) {
-      throw new Error("Selecciona un servicio.");
-    }
-
-    if (!selectedDate) {
-      throw new Error("Selecciona un día.");
-    }
-
-    if (isPastDate(selectedDate)) {
-      throw new Error("No se puede reservar en fechas pasadas.");
-    }
-
-    if (!selectedTime) {
-      throw new Error("Selecciona una hora.");
-    }
-
-    if (!clientName.trim()) {
-      throw new Error("Introduce tu nombre.");
-    }
-
-    if (!phone.trim()) {
-      throw new Error("Introduce tu teléfono.");
-    }
-
-    const response = await fetch("/api/public-booking", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        employeeId,
-        serviceId: Number(serviceId),
-        date: selectedDate,
-        startTime: selectedTime,
-        clientName,
-        phone,
-        notes,
-      }),
-    });
-
-    const rawText = await response.text();
-
-    let data: any = null;
-
-    if (rawText) {
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        throw new Error(
-          `La API devolvió una respuesta no válida: ${rawText.slice(0, 200)}`
-        );
+    try {
+      if (!serviceId) {
+        throw new Error("Selecciona un servicio.");
       }
-    }
 
-    if (!response.ok) {
-      throw new Error(data?.error || "No se pudo crear la reserva.");
-    }
+      if (!selectedDate) {
+        throw new Error("Selecciona un día.");
+      }
 
-    if (!data?.booking) {
-      throw new Error("La API no devolvió los datos de la reserva creada.");
-    }
+      if (isPastDate(selectedDate)) {
+        throw new Error("No se puede reservar en fechas pasadas.");
+      }
 
-    setSuccess(
-      `Reserva creada para el ${formatDate(data.booking.date)} a las ${
-        data.booking.start_time
-      }.`
-    );
+      if (!selectedTime) {
+        throw new Error("Selecciona una hora.");
+      }
 
-    setSelectedTime("");
-    setNotes("");
+      if (!clientName.trim()) {
+        throw new Error("Introduce tu nombre.");
+      }
 
-    const refreshDay = await fetch(
-      `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&date=${selectedDate}`
-    );
+      if (!phone.trim()) {
+        throw new Error("Introduce tu teléfono.");
+      }
 
-    const refreshDayText = await refreshDay.text();
-    const refreshDayData: DayAvailabilityResponse = JSON.parse(refreshDayText);
-
-    if (refreshDay.ok) {
-      setDaySlots(refreshDayData.availableSlots);
-      setDaySummary({
-        date: refreshDayData.date,
-        color: refreshDayData.summary.color,
-        title: refreshDayData.summary.title,
-        detail: refreshDayData.summary.detail,
-        slots: refreshDayData.summary.slots,
+      const response = await fetch("/api/public-booking", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId,
+          serviceId: Number(serviceId),
+          date: selectedDate,
+          startTime: selectedTime,
+          clientName,
+          phone,
+          notes,
+        }),
       });
+
+      const rawText = await response.text();
+
+      let data: any = null;
+
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(
+            `La API devolvió una respuesta no válida: ${rawText.slice(0, 200)}`
+          );
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || "No se pudo crear la reserva.");
+      }
+
+      if (!data?.booking) {
+        throw new Error("La API no devolvió los datos de la reserva creada.");
+      }
+
+      setSuccess(
+        `Reserva creada para el ${formatDate(data.booking.date)} a las ${data.booking.start_time}.`
+      );
+
+      setSelectedTime("");
+      setNotes("");
+
+      const refreshDay = await fetch(
+        `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&date=${selectedDate}`
+      );
+
+      const refreshDayText = await refreshDay.text();
+      const refreshDayData: DayAvailabilityResponse = JSON.parse(refreshDayText);
+
+      if (refreshDay.ok) {
+        setDaySlots(refreshDayData.availableSlots);
+        setDaySummary({
+          date: refreshDayData.date,
+          color: refreshDayData.summary.color,
+          title: refreshDayData.summary.title,
+          detail: refreshDayData.summary.detail,
+          slots: refreshDayData.summary.slots,
+        });
+      }
+
+      const refreshMonth = await fetch(
+        `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&month=${month}`
+      );
+
+      const refreshMonthText = await refreshMonth.text();
+      const refreshMonthData: MonthAvailabilityResponse =
+        JSON.parse(refreshMonthText);
+
+      if (refreshMonth.ok) {
+        setMonthDays(refreshMonthData.days);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Error al crear la reserva."
+      );
+    } finally {
+      setSaving(false);
     }
-
-    const refreshMonth = await fetch(
-      `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&month=${month}`
-    );
-
-    const refreshMonthText = await refreshMonth.text();
-    const refreshMonthData: MonthAvailabilityResponse =
-      JSON.parse(refreshMonthText);
-
-    if (refreshMonth.ok) {
-      setMonthDays(refreshMonthData.days);
-    }
-  } catch (err) {
-    setError(
-      err instanceof Error ? err.message : "Error al crear la reserva."
-    );
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   if (loadingBase) {
     return (
       <main className="min-h-screen bg-zinc-50 px-6 py-10">
         <div className="mx-auto max-w-6xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
           Cargando formulario público...
+        </div>
+      </main>
+    );
+  }
+
+  if (error && !employee) {
+    return (
+      <main className="min-h-screen bg-zinc-50 px-4 py-8 md:px-6 md:py-10">
+        <div className="mx-auto max-w-4xl space-y-6">
+          <Link
+            href="/reservar"
+            className="inline-flex rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+          >
+            ← Volver a profesionales
+          </Link>
+
+          <section className="rounded-3xl border border-red-200 bg-red-50 p-8 shadow-sm text-red-700">
+            {error}
+          </section>
         </div>
       </main>
     );

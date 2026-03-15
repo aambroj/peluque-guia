@@ -5,20 +5,24 @@ import { useState } from "react";
 
 type Props = {
   id: number;
+  name?: string;
 };
 
-export default function DeleteReservaButton({ id }: Props) {
+export default function DarBajaEmpleadoButton({ id, name }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  const handleDelete = async () => {
-    const ok = window.confirm("¿Seguro que quieres borrar esta reserva?");
+  const handleClick = async () => {
+    const ok = window.confirm(
+      `¿Seguro que quieres dar de baja a ${name ?? "este empleado"}?\n\nSeguirá existiendo para conservar el histórico, pero dejará de aparecer como activo.`
+    );
+
     if (!ok) return;
 
     setLoading(true);
 
     try {
-      const response = await fetch("/api/admin-reservas/delete", {
+      const response = await fetch("/api/admin-empleados/deactivate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -34,12 +38,12 @@ export default function DeleteReservaButton({ id }: Props) {
         result = rawText ? JSON.parse(rawText) : {};
       } catch {
         throw new Error(
-          "La ruta API de borrado no está respondiendo bien."
+          "La ruta API no está respondiendo bien. Revisa app/api/admin-empleados/deactivate/route.ts"
         );
       }
 
       if (!response.ok) {
-        throw new Error(result.error || "No se pudo borrar la reserva");
+        throw new Error(result.error || "No se pudo dar de baja al empleado");
       }
 
       router.refresh();
@@ -47,7 +51,7 @@ export default function DeleteReservaButton({ id }: Props) {
       alert(
         error instanceof Error
           ? error.message
-          : "No se pudo borrar la reserva"
+          : "No se pudo dar de baja al empleado"
       );
     } finally {
       setLoading(false);
@@ -57,11 +61,11 @@ export default function DeleteReservaButton({ id }: Props) {
   return (
     <button
       type="button"
-      onClick={handleDelete}
+      onClick={handleClick}
       disabled={loading}
       className="rounded-lg border border-red-300 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
     >
-      {loading ? "Borrando..." : "Borrar"}
+      {loading ? "Dando de baja..." : "Dar de baja"}
     </button>
   );
 }

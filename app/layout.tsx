@@ -27,10 +27,6 @@ export default function RootLayout({
                     Administra tu peluquería desde un solo lugar
                   </p>
                 </div>
-
-                <div className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white">
-                  Demo
-                </div>
               </div>
             </header>
 

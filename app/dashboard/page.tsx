@@ -10,6 +10,14 @@ function toDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function normalizeText(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function getRelation(value: any) {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -89,7 +97,7 @@ export default async function DashboardPage() {
 
   const [
     { count: clientesCount, error: clientesError },
-    { count: empleadosCount, error: empleadosError },
+    { data: empleadosDetalle, error: empleadosDetalleError },
     { count: serviciosCount, error: serviciosError },
     { count: reservasHoyCount, error: reservasHoyError },
     { count: reservasProximos7Count, error: reservasProximos7Error },
@@ -102,7 +110,12 @@ export default async function DashboardPage() {
     { data: reservasMesDetalle, error: reservasMesDetalleError },
   ] = await Promise.all([
     supabase.from("clientes").select("id", { count: "exact", head: true }),
-    supabase.from("empleados").select("id", { count: "exact", head: true }),
+
+    supabase
+      .from("empleados")
+      .select("id, status")
+      .order("name", { ascending: true }),
+
     supabase.from("servicios").select("id", { count: "exact", head: true }),
 
     supabase
@@ -181,7 +194,7 @@ export default async function DashboardPage() {
 
   const errores = [
     clientesError,
-    empleadosError,
+    empleadosDetalleError,
     serviciosError,
     reservasHoyError,
     reservasProximos7Error,
@@ -193,6 +206,11 @@ export default async function DashboardPage() {
     reservasHoyDetalleError,
     reservasMesDetalleError,
   ].filter(Boolean);
+
+  const empleadosActivosCount =
+    (empleadosDetalle ?? []).filter(
+      (empleado: any) => normalizeText(empleado.status ?? "Activo") !== "inactivo"
+    ).length ?? 0;
 
   const reservasHoy = reservasHoyDetalle ?? [];
   const reservasMes = reservasMesDetalle ?? [];
@@ -339,10 +357,10 @@ export default async function DashboardPage() {
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-zinc-500">Empleados</p>
             <p className="mt-3 text-4xl font-bold tracking-tight text-zinc-900">
-              {empleadosCount ?? 0}
+              {empleadosActivosCount}
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              Personal disponible en el sistema
+              Personal activo en el sistema
             </p>
           </div>
 

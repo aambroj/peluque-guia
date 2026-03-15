@@ -33,6 +33,10 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeStatus(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
 function parseTimeToMinutes(time: string) {
   const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(time);
   if (!match) return null;
@@ -228,7 +232,7 @@ export async function POST(request: Request) {
     ] = await Promise.all([
       supabaseAdmin
         .from("empleados")
-        .select("id, name, public_booking_enabled")
+        .select("id, name, status, public_booking_enabled")
         .eq("id", employee_id)
         .eq("public_booking_enabled", true)
         .maybeSingle(),
@@ -313,6 +317,22 @@ export async function POST(request: Request) {
             "El empleado seleccionado no existe o no está disponible para reserva online.",
         },
         { status: 400 }
+      );
+    }
+
+    const employeeStatus = normalizeStatus((empleado as any).status);
+
+    if (
+      employeeStatus === "descanso" ||
+      employeeStatus === "vacaciones" ||
+      employeeStatus === "inactivo"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "El empleado seleccionado no está disponible actualmente para reservas online.",
+        },
+        { status: 409 }
       );
     }
 

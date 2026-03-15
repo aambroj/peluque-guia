@@ -3,18 +3,53 @@ import { supabase } from "@/lib/supabase";
 import DeleteReservaButton from "@/components/DeleteReservaButton";
 import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 
+type SortField = "client" | "employee" | "service" | "date" | "time" | "status";
+type SortDirection = "asc" | "desc";
+
 type ReservasPageProps = {
   searchParams?: Promise<{
     q?: string;
     status?: string;
     employee?: string;
     date?: string;
+    sort?: string;
+    dir?: string;
   }>;
 };
 
 function getRelationName(value: any, fallback = "-") {
   if (Array.isArray(value)) return value[0]?.name ?? fallback;
   return value?.name ?? fallback;
+}
+
+function getRelationId(value: any, fallback = "") {
+  if (Array.isArray(value)) return value[0]?.id ?? fallback;
+  return value?.id ?? fallback;
+}
+
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isSortField(value: string): value is SortField {
+  return (
+    value === "client" ||
+    value === "employee" ||
+    value === "service" ||
+    value === "date" ||
+    value === "time" ||
+    value === "status"
+  );
+}
+
+function compareStrings(a: unknown, b: unknown) {
+  return String(a ?? "").localeCompare(String(b ?? ""), "es", {
+    sensitivity: "base",
+  });
 }
 
 export default async function ReservasPage({
@@ -26,6 +61,12 @@ export default async function ReservasPage({
   const status = params.status?.trim() ?? "";
   const employee = params.employee?.trim() ?? "";
   const date = params.date?.trim() ?? "";
+  const sort: SortField = isSortField(params.sort?.trim() ?? "")
+    ? (params.sort!.trim() as SortField)
+    : "date";
+  const dir: SortDirection = params.dir?.trim() === "desc" ? "desc" : "asc";
+
+  const normalizedQ = normalizeSearchText(q);
 
   const today = new Date().toISOString().split("T")[0];
   const agendaDate = date || today;
@@ -83,34 +124,75 @@ export default async function ReservasPage({
 
   const reservasFiltradas =
     reservas?.filter((reserva) => {
-      if (!q) return true;
+      if (!normalizedQ) return true;
 
       const clienteNombre = getRelationName(reserva.cliente, "");
       const empleadoNombre = getRelationName(reserva.empleado, "");
       const servicioNombre = getRelationName(reserva.servicio, "");
 
-      const texto =
-        `${clienteNombre} ${empleadoNombre} ${servicioNombre}`.toLowerCase();
+      const textoNormalizado = normalizeSearchText(
+        `${clienteNombre} ${empleadoNombre} ${servicioNombre}`
+      );
 
-      return texto.includes(q.toLowerCase());
+      return textoNormalizado.includes(normalizedQ);
     }) ?? [];
+
+  const reservasOrdenadas = [...reservasFiltradas].sort((a, b) => {
+    let compare = 0;
+
+    if (sort === "client") {
+      compare = compareStrings(
+        getRelationName(a.cliente, ""),
+        getRelationName(b.cliente, "")
+      );
+    } else if (sort === "employee") {
+      compare = compareStrings(
+        getRelationName(a.empleado, ""),
+        getRelationName(b.empleado, "")
+      );
+    } else if (sort === "service") {
+      compare = compareStrings(
+        getRelationName(a.servicio, ""),
+        getRelationName(b.servicio, "")
+      );
+    } else if (sort === "date") {
+      compare = compareStrings(a.date, b.date);
+    } else if (sort === "time") {
+      compare = compareStrings(a.time, b.time);
+    } else if (sort === "status") {
+      compare = compareStrings(a.status, b.status);
+    }
+
+    if (compare === 0) {
+      const fallbackDate = compareStrings(a.date, b.date);
+      if (fallbackDate !== 0) return dir === "asc" ? fallbackDate : -fallbackDate;
+
+      const fallbackTime = compareStrings(a.time, b.time);
+      if (fallbackTime !== 0) return dir === "asc" ? fallbackTime : -fallbackTime;
+
+      return compareStrings(String(a.id), String(b.id));
+    }
+
+    return dir === "asc" ? compare : -compare;
+  });
 
   const agendaFiltrada =
     agendaReservas?.filter((reserva) => {
-      if (employee && String((reserva as any).empleado?.id ?? "") !== employee) {
+      if (employee && String(getRelationId(reserva.empleado, "")) !== employee) {
         return false;
       }
 
-      if (!q) return true;
+      if (!normalizedQ) return true;
 
       const clienteNombre = getRelationName(reserva.cliente, "");
       const empleadoNombre = getRelationName(reserva.empleado, "");
       const servicioNombre = getRelationName(reserva.servicio, "");
 
-      const texto =
-        `${clienteNombre} ${empleadoNombre} ${servicioNombre}`.toLowerCase();
+      const textoNormalizado = normalizeSearchText(
+        `${clienteNombre} ${empleadoNombre} ${servicioNombre}`
+      );
 
-      return texto.includes(q.toLowerCase());
+      return textoNormalizado.includes(normalizedQ);
     }) ?? [];
 
   const agendaPorEmpleadoMap: Record<string, typeof agendaFiltrada> = {};
@@ -131,8 +213,30 @@ export default async function ReservasPage({
   });
 
   const empleadosConReservasVisibles = new Set(
-    reservasFiltradas.map((reserva) => getRelationName(reserva.empleado, "Sin asignar"))
+    reservasOrdenadas.map((reserva) => getRelationName(reserva.empleado, "Sin asignar"))
   ).size;
+
+  function buildSortHref(field: SortField) {
+    const nextDir: SortDirection =
+      sort === field ? (dir === "asc" ? "desc" : "asc") : "asc";
+
+    const search = new URLSearchParams();
+
+    if (q) search.set("q", q);
+    if (status) search.set("status", status);
+    if (employee) search.set("employee", employee);
+    if (date) search.set("date", date);
+
+    search.set("sort", field);
+    search.set("dir", nextDir);
+
+    return `/reservas?${search.toString()}`;
+  }
+
+  function getSortLabel(label: string, field: SortField) {
+    if (sort !== field) return `${label} ↕`;
+    return dir === "asc" ? `${label} ↑` : `${label} ↓`;
+  }
 
   return (
     <section className="px-6 py-8">
@@ -166,27 +270,27 @@ export default async function ReservasPage({
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Reservas visibles</p>
-            <p className="mt-3 text-3xl font-bold">{reservasFiltradas.length}</p>
+            <p className="mt-3 text-3xl font-bold">{reservasOrdenadas.length}</p>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Confirmadas</p>
             <p className="mt-3 text-3xl font-bold">
-              {reservasFiltradas.filter((r) => r.status === "Confirmada").length}
+              {reservasOrdenadas.filter((r) => r.status === "Confirmada").length}
             </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Pendientes</p>
             <p className="mt-3 text-3xl font-bold">
-              {reservasFiltradas.filter((r) => r.status === "Pendiente").length}
+              {reservasOrdenadas.filter((r) => r.status === "Pendiente").length}
             </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Canceladas</p>
             <p className="mt-3 text-3xl font-bold">
-              {reservasFiltradas.filter((r) => r.status === "Cancelada").length}
+              {reservasOrdenadas.filter((r) => r.status === "Cancelada").length}
             </p>
           </div>
 
@@ -206,6 +310,9 @@ export default async function ReservasPage({
             </div>
 
             <form className="flex flex-wrap gap-2">
+              <input type="hidden" name="sort" value={sort} />
+              <input type="hidden" name="dir" value={dir} />
+
               <input
                 type="text"
                 name="q"
@@ -296,76 +403,71 @@ export default async function ReservasPage({
             </div>
           ) : agendaPorEmpleado.length > 0 ? (
             <div className="grid gap-4 xl:grid-cols-2">
-              {agendaPorEmpleado.map(([empleadoNombre, reservasEmpleado]) => (
-                <div
-                  key={empleadoNombre}
-                  className="rounded-2xl border border-zinc-200 p-4"
-                >
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-lg font-semibold text-zinc-900">
-                        {empleadoNombre}
-                      </p>
-                      <p className="text-sm text-zinc-500">
-                        {reservasEmpleado.length} reserva(s)
-                      </p>
+              {agendaPorEmpleado.map(([empleadoNombre, reservasEmpleado]) => {
+                const empleadoId = getRelationId(reservasEmpleado[0]?.empleado, "");
+
+                return (
+                  <div
+                    key={empleadoNombre}
+                    className="rounded-2xl border border-zinc-200 p-4"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-semibold text-zinc-900">
+                          {empleadoNombre}
+                        </p>
+                        <p className="text-sm text-zinc-500">
+                          {reservasEmpleado.length} reserva(s)
+                        </p>
+                      </div>
+
+                      <Link
+                        href={`/reservas?date=${agendaDate}&employee=${empleadoId}`}
+                        className="text-sm font-medium text-zinc-700 hover:text-black"
+                      >
+                        Ver solo este empleado
+                      </Link>
                     </div>
 
-                    <Link
-                      href={`/reservas?date=${agendaDate}&employee=${
-                        reservasEmpleado[0] &&
-                        (Array.isArray(reservasEmpleado[0].empleado)
-                          ? reservasEmpleado[0].empleado[0]?.id
-                          : reservasEmpleado[0].empleado?.id)
-                          ? Array.isArray(reservasEmpleado[0].empleado)
-                            ? reservasEmpleado[0].empleado[0]?.id
-                            : reservasEmpleado[0].empleado?.id
-                          : ""
-                      }`}
-                      className="text-sm font-medium text-zinc-700 hover:text-black"
-                    >
-                      Ver solo este empleado
-                    </Link>
-                  </div>
+                    <div className="space-y-3">
+                      {reservasEmpleado.map((reserva) => {
+                        const clienteNombre = getRelationName(
+                          reserva.cliente,
+                          "Sin cliente"
+                        );
+                        const servicioNombre = getRelationName(
+                          reserva.servicio,
+                          "Sin servicio"
+                        );
 
-                  <div className="space-y-3">
-                    {reservasEmpleado.map((reserva) => {
-                      const clienteNombre = getRelationName(
-                        reserva.cliente,
-                        "Sin cliente"
-                      );
-                      const servicioNombre = getRelationName(
-                        reserva.servicio,
-                        "Sin servicio"
-                      );
-
-                      return (
-                        <div
-                          key={reserva.id}
-                          className="flex items-center justify-between rounded-2xl border border-zinc-200 p-4"
-                        >
-                          <div className="min-w-0">
-                            <p className="font-semibold text-zinc-900">
-                              {formatTime(reserva.time)} · {clienteNombre}
-                            </p>
-                            <p className="mt-1 text-sm text-zinc-500">
-                              {servicioNombre}
-                            </p>
-                          </div>
-
-                          <span
-                            className={`ml-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClasses(
-                              reserva.status
-                            )}`}
+                        return (
+                          <div
+                            key={reserva.id}
+                            className="flex items-center justify-between rounded-2xl border border-zinc-200 p-4"
                           >
-                            {reserva.status}
-                          </span>
-                        </div>
-                      );
-                    })}
+                            <div className="min-w-0">
+                              <p className="font-semibold text-zinc-900">
+                                {formatTime(reserva.time)} · {clienteNombre}
+                              </p>
+                              <p className="mt-1 text-sm text-zinc-500">
+                                {servicioNombre}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`ml-4 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClasses(
+                                reserva.status
+                              )}`}
+                            >
+                              {reserva.status}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
@@ -391,17 +493,29 @@ export default async function ReservasPage({
           ) : (
             <div className="overflow-hidden rounded-2xl border border-zinc-200">
               <div className="grid grid-cols-7 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
-                <span>Cliente</span>
-                <span>Empleado</span>
-                <span>Servicio</span>
-                <span>Fecha</span>
-                <span>Hora</span>
-                <span>Estado</span>
+                <Link href={buildSortHref("client")} className="hover:text-black">
+                  {getSortLabel("Cliente", "client")}
+                </Link>
+                <Link href={buildSortHref("employee")} className="hover:text-black">
+                  {getSortLabel("Empleado", "employee")}
+                </Link>
+                <Link href={buildSortHref("service")} className="hover:text-black">
+                  {getSortLabel("Servicio", "service")}
+                </Link>
+                <Link href={buildSortHref("date")} className="hover:text-black">
+                  {getSortLabel("Fecha", "date")}
+                </Link>
+                <Link href={buildSortHref("time")} className="hover:text-black">
+                  {getSortLabel("Hora", "time")}
+                </Link>
+                <Link href={buildSortHref("status")} className="hover:text-black">
+                  {getSortLabel("Estado", "status")}
+                </Link>
                 <span>Acciones</span>
               </div>
 
-              {reservasFiltradas.length > 0 ? (
-                reservasFiltradas.map((reserva) => {
+              {reservasOrdenadas.length > 0 ? (
+                reservasOrdenadas.map((reserva) => {
                   const clienteNombre = getRelationName(
                     reserva.cliente,
                     "Sin cliente"

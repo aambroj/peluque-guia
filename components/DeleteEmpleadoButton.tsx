@@ -1,42 +1,60 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { useState } from "react";
 
 type Props = {
   id: number;
+  name?: string;
 };
 
-export default function DeleteEmpleadoButton({ id }: Props) {
+export default function DeleteEmpleadoButton({ id, name }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const handleDelete = async () => {
-    const ok = window.confirm("¿Seguro que quieres borrar este empleado?");
+    const ok = window.confirm(
+      `¿Seguro que quieres dar de baja a ${name ?? "este empleado"}?\n\nSeguirá existiendo para conservar el histórico, pero dejará de aparecer como activo.`
+    );
     if (!ok) return;
 
     setLoading(true);
 
-    const { error } = await supabase.from("empleados").delete().eq("id", id);
+    try {
+      const response = await fetch("/api/admin-empleados/deactivate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
 
-    setLoading(false);
+      const result = await response.json();
 
-    if (error) {
-      alert(`Error al borrar: ${error.message}`);
-      return;
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo dar de baja al empleado");
+      }
+
+      router.refresh();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "No se pudo dar de baja al empleado"
+      );
+    } finally {
+      setLoading(false);
     }
-
-    router.refresh();
   };
 
   return (
     <button
+      type="button"
       onClick={handleDelete}
       disabled={loading}
       className="rounded-lg border border-red-300 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
     >
-      {loading ? "Borrando..." : "Borrar"}
+      {loading ? "Dando de baja..." : "Dar de baja"}
     </button>
   );
 }

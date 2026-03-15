@@ -17,6 +17,18 @@ function normalizeStatus(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
+function isEmployeePublicBookable(empleado: EmpleadoPublico) {
+  const status = normalizeStatus(empleado.status);
+  const canBook = empleado.public_booking_enabled === true;
+
+  return (
+    canBook &&
+    status !== "descanso" &&
+    status !== "vacaciones" &&
+    status !== "inactivo"
+  );
+}
+
 export default function ReservarPage() {
   const [empleados, setEmpleados] = useState<EmpleadoPublico[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,13 +51,7 @@ export default function ReservarPage() {
       }
 
       const rows = (data ?? []) as EmpleadoPublico[];
-
-      const visibles = rows.filter((empleado) => {
-        const status = normalizeStatus(empleado.status);
-        const canBook = empleado.public_booking_enabled === true;
-
-        return canBook && status !== "descanso" && status !== "vacaciones";
-      });
+      const visibles = rows.filter(isEmployeePublicBookable);
 
       setEmpleados(visibles);
       setLoading(false);

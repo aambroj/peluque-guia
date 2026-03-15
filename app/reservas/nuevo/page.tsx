@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getBookingAvailability } from "@/lib/bookingAvailability";
@@ -18,6 +18,7 @@ type Cliente = {
 type Empleado = {
   id: number;
   name: string;
+  status?: string | null;
 };
 
 type Servicio = {
@@ -31,17 +32,30 @@ type DayStatus = {
   detail: string;
 };
 
+type ClientesResponse = {
+  clientes: Cliente[];
+  error?: string;
+};
+
 function getDayStatusClasses(tone: DayStatus["tone"]) {
   switch (tone) {
     case "green":
       return "border-green-200 bg-green-50 text-green-700";
     case "orange":
-      return "border-orange-200 bg-orange-50 text-orange-700";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "red":
       return "border-red-200 bg-red-50 text-red-700";
     default:
       return "border-zinc-200 bg-zinc-50 text-zinc-600";
   }
+}
+
+function normalizeText(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 export default function NuevaReservaPage() {
@@ -50,6 +64,9 @@ export default function NuevaReservaPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [servicios, setServicios] = useState<Servicio[]>([]);
+
+  const [clientSearch, setClientSearch] = useState("");
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
 
   const [form, setForm] = useState({
     client_id: "",
@@ -71,16 +88,19 @@ export default function NuevaReservaPage() {
     detail: "Selecciona empleado, servicio y fecha.",
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const [clientesRes, empleadosRes, serviciosRes] = await Promise.all([
-        supabase
-          .from("clientes")
-          .select("id, name")
-          .order("name", { ascending: true }),
+  const loadData = useCallback(async () => {
+    setLoadingData(true);
+    setError("");
+
+    try {
+      const [clientesHttpRes, empleadosRes, serviciosRes] = await Promise.all([
+        fetch("/api/admin-clientes", {
+          method: "GET",
+          cache: "no-store",
+        }),
         supabase
           .from("empleados")
-          .select("id, name")
+          .select("id, name, status")
           .order("name", { ascending: true }),
         supabase
           .from("servicios")
@@ -88,25 +108,43 @@ export default function NuevaReservaPage() {
           .order("name", { ascending: true }),
       ]);
 
-      if (clientesRes.error || empleadosRes.error || serviciosRes.error) {
-        setError(
-          clientesRes.error?.message ||
-            empleadosRes.error?.message ||
+      const clientesJson = (await clientesHttpRes.json()) as ClientesResponse;
+
+      if (!clientesHttpRes.ok) {
+        throw new Error(clientesJson.error || "Error al cargar clientes");
+      }
+
+      if (empleadosRes.error || serviciosRes.error) {
+        throw new Error(
+          empleadosRes.error?.message ||
             serviciosRes.error?.message ||
             "Error al cargar datos"
         );
-        setLoadingData(false);
-        return;
       }
 
-      setClientes((clientesRes.data ?? []) as Cliente[]);
-      setEmpleados((empleadosRes.data ?? []) as Empleado[]);
-      setServicios((serviciosRes.data ?? []) as Servicio[]);
-      setLoadingData(false);
-    };
+      const empleadosActivos = ((empleadosRes.data ?? []) as Empleado[])
+        .filter(
+          (empleado) =>
+            normalizeText(empleado.status ?? "Activo") !== "inactivo"
+        )
+        .map(({ id, name }) => ({ id, name }));
 
-    fetchData();
+      setClientes(clientesJson.clientes ?? []);
+      setEmpleados(empleadosActivos);
+      setServicios((serviciosRes.data ?? []) as Servicio[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar datos");
+      setClientes([]);
+      setEmpleados([]);
+      setServicios([]);
+    } finally {
+      setLoadingData(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   useEffect(() => {
     const loadAvailability = async () => {
@@ -183,7 +221,7 @@ export default function NuevaReservaPage() {
         } else {
           setDayStatus({
             tone: "orange",
-            title: "Semiocupado",
+            title: "Libre",
             detail: `Quedan ${result.availableSlots.length} huecos disponibles.`,
           });
         }
@@ -208,17 +246,84 @@ export default function NuevaReservaPage() {
     loadAvailability();
   }, [form.employee_id, form.service_id, form.date]);
 
+  const filteredClientes = useMemo(() => {
+    const normalizedSearch = normalizeText(clientSearch);
+
+    if (!normalizedSearch) {
+      return clientes.slice(0, 8);
+    }
+
+    return [...clientes]
+      .filter((cliente) =>
+        normalizeText(cliente.name).includes(normalizedSearch)
+      )
+      .sort((a, b) => {
+        const aName = normalizeText(a.name);
+        const bName = normalizeText(b.name);
+
+        const aStarts = aName.startsWith(normalizedSearch) ? 0 : 1;
+        const bStarts = bName.startsWith(normalizedSearch) ? 0 : 1;
+
+        if (aStarts !== bStarts) return aStarts - bStarts;
+        return a.name.localeCompare(b.name, "es");
+      })
+      .slice(0, 8);
+  }, [clientes, clientSearch]);
+
+  const selectedClient = useMemo(() => {
+    return clientes.find((c) => String(c.id) === form.client_id) ?? null;
+  }, [clientes, form.client_id]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-
     setError("");
 
     setForm((prev) => ({
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleClientInputChange = (value: string) => {
+    setError("");
+    setClientSearch(value);
+    setShowClientDropdown(true);
+
+    setForm((prev) => ({
+      ...prev,
+      client_id: "",
+    }));
+  };
+
+  const selectClient = (cliente: Cliente) => {
+    setClientSearch(cliente.name);
+    setShowClientDropdown(false);
+    setError("");
+
+    setForm((prev) => ({
+      ...prev,
+      client_id: String(cliente.id),
+    }));
+  };
+
+  const handleClientBlur = () => {
+    const exactMatch = clientes.find(
+      (cliente) => normalizeText(cliente.name) === normalizeText(clientSearch)
+    );
+
+    if (exactMatch) {
+      setForm((prev) => ({
+        ...prev,
+        client_id: String(exactMatch.id),
+      }));
+      setClientSearch(exactMatch.name);
+    }
+
+    setTimeout(() => {
+      setShowClientDropdown(false);
+    }, 150);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,12 +387,18 @@ export default function NuevaReservaPage() {
         status: form.status,
       };
 
-      const { error: insertError } = await supabase
-        .from("reservas")
-        .insert([payload]);
+      const response = await fetch("/api/admin-reservas", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
 
-      if (insertError) {
-        throw new Error(insertError.message);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Error al guardar la reserva");
       }
 
       router.push("/reservas");
@@ -328,20 +439,66 @@ export default function NuevaReservaPage() {
               <label className="mb-2 block text-sm font-medium text-zinc-700">
                 Cliente
               </label>
-              <select
-                name="client_id"
-                value={form.client_id}
-                onChange={handleChange}
-                required
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black"
-              >
-                <option value="">Selecciona un cliente</option>
-                {clientes.map((cliente) => (
-                  <option key={cliente.id} value={cliente.id}>
-                    {cliente.name}
-                  </option>
-                ))}
-              </select>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={clientSearch}
+                  onChange={(e) => handleClientInputChange(e.target.value)}
+                  onFocus={() => setShowClientDropdown(true)}
+                  onBlur={handleClientBlur}
+                  placeholder="Escribe el nombre del cliente..."
+                  className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                />
+
+                {showClientDropdown ? (
+                  <div className="absolute z-20 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-lg">
+                    {filteredClientes.length > 0 ? (
+                      filteredClientes.map((cliente) => (
+                        <button
+                          key={cliente.id}
+                          type="button"
+                          onMouseDown={() => selectClient(cliente)}
+                          className="block w-full border-b border-zinc-100 px-4 py-3 text-left text-sm hover:bg-zinc-50 last:border-b-0"
+                        >
+                          {cliente.name}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-sm text-zinc-500">
+                        {clientes.length === 0
+                          ? "No se han podido cargar clientes."
+                          : "No hay clientes que coincidan."}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-sm text-zinc-500">
+                  Escribe unas letras y elige un cliente del desplegable.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={loadData}
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                >
+                  Recargar lista
+                </button>
+              </div>
+
+              {selectedClient ? (
+                <p className="mt-2 text-sm text-green-700">
+                  Cliente seleccionado:{" "}
+                  <span className="font-medium">{selectedClient.name}</span>
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-amber-600">
+                  Debes seleccionar un cliente del desplegable.
+                </p>
+              )}
             </div>
 
             <div>
@@ -384,11 +541,9 @@ export default function NuevaReservaPage() {
               </select>
             </div>
 
-            <div className="rounded-2xl border p-4 text-sm font-medium ${getDayStatusClasses(dayStatus.tone)}">
-              <div className={`rounded-2xl border p-4 ${getDayStatusClasses(dayStatus.tone)}`}>
-                <p className="font-semibold">{dayStatus.title}</p>
-                <p className="mt-1 text-sm">{dayStatus.detail}</p>
-              </div>
+            <div className={`rounded-2xl border p-4 ${getDayStatusClasses(dayStatus.tone)}`}>
+              <p className="font-semibold">{dayStatus.title}</p>
+              <p className="mt-1 text-sm">{dayStatus.detail}</p>
             </div>
 
             <div className="grid gap-5 md:grid-cols-2">

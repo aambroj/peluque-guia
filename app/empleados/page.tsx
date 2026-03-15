@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import DarBajaEmpleadoButton from "@/components/DarBajaEmpleadoButton";
 
 type EmpleadosPageProps = {
   searchParams?: Promise<{
@@ -7,24 +8,39 @@ type EmpleadosPageProps = {
   }>;
 };
 
+function normalizeText(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 export default async function EmpleadosPage({
   searchParams,
 }: EmpleadosPageProps) {
   const params = (await searchParams) ?? {};
-  const q = params.q?.trim().toLowerCase() ?? "";
+  const q = normalizeText(params.q ?? "");
 
   const { data: empleados, error } = await supabase
     .from("empleados")
     .select("*")
     .order("name", { ascending: true });
 
-  const empleadosFiltrados =
-    empleados?.filter((empleado) => {
-      if (!q) return true;
+  const empleadosActivos =
+    empleados?.filter(
+      (empleado) => normalizeText(empleado.status ?? "Activo") !== "inactivo"
+    ) ?? [];
 
-      const texto = `${empleado.name ?? ""} ${empleado.role ?? ""} ${empleado.phone ?? ""} ${empleado.status ?? ""}`.toLowerCase();
-      return texto.includes(q);
-    }) ?? [];
+  const empleadosFiltrados = empleadosActivos.filter((empleado) => {
+    if (!q) return true;
+
+    const texto = normalizeText(
+      `${empleado.name ?? ""} ${empleado.role ?? ""} ${empleado.phone ?? ""} ${empleado.status ?? ""}`
+    );
+
+    return texto.includes(q);
+  });
 
   return (
     <section className="px-6 py-8">
@@ -117,13 +133,18 @@ export default async function EmpleadosPage({
                     >
                       Editar
                     </Link>
+
+                    <DarBajaEmpleadoButton
+                      id={empleado.id}
+                      name={empleado.name ?? "este empleado"}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="rounded-2xl border border-zinc-200 p-6 text-sm text-zinc-500">
-              No hay empleados registrados.
+              No hay empleados activos registrados.
             </div>
           )}
         </div>

@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 type Empleado = {
   id: number;
   name: string;
+  status?: string | null;
+  public_booking_enabled?: boolean | null;
 };
 
 type Servicio = {
@@ -51,6 +53,23 @@ type ReservaRow = {
 type DayColor = "green" | "orange" | "red";
 
 const SLOT_STEP_MINUTES = 30;
+
+function normalizeStatus(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function isEmployeePublicBookable(employee: Empleado | null | undefined) {
+  if (!employee) return false;
+
+  const status = normalizeStatus(employee.status);
+
+  return (
+    employee.public_booking_enabled === true &&
+    status !== "inactivo" &&
+    status !== "vacaciones" &&
+    status !== "descanso"
+  );
+}
 
 function parseTimeToMinutes(time: string | null | undefined) {
   if (!time) return null;
@@ -320,7 +339,7 @@ async function getBaseData(employeeId: number, serviceId: number) {
   ] = await Promise.all([
     supabaseAdmin
       .from("empleados")
-      .select("id, name")
+      .select("id, name, status, public_booking_enabled")
       .eq("id", employeeId)
       .eq("public_booking_enabled", true)
       .maybeSingle(),
@@ -341,7 +360,9 @@ async function getBaseData(employeeId: number, serviceId: number) {
     throw new Error(serviceError.message);
   }
 
-  if (!employee) {
+  const typedEmployee = (employee as Empleado | null) ?? null;
+
+  if (!typedEmployee || !isEmployeePublicBookable(typedEmployee)) {
     throw new Error("Empleado no disponible para reservas públicas.");
   }
 
@@ -357,7 +378,7 @@ async function getBaseData(employeeId: number, serviceId: number) {
   }
 
   return {
-    employee: employee as Empleado,
+    employee: typedEmployee,
     service: service as Servicio,
   };
 }
