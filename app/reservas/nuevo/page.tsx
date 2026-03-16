@@ -274,6 +274,21 @@ export default function NuevaReservaPage() {
     return clientes.find((c) => String(c.id) === form.client_id) ?? null;
   }, [clientes, form.client_id]);
 
+  const resolveClientFromSearch = useCallback(() => {
+    if (form.client_id) {
+      return clientes.find((c) => String(c.id) === form.client_id) ?? null;
+    }
+
+    const normalizedSearch = normalizeText(clientSearch);
+    if (!normalizedSearch) return null;
+
+    const exactMatch = clientes.find(
+      (cliente) => normalizeText(cliente.name) === normalizedSearch
+    );
+
+    return exactMatch ?? null;
+  }, [clientes, clientSearch, form.client_id]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -332,7 +347,12 @@ export default function NuevaReservaPage() {
     setError("");
 
     try {
-      if (!form.client_id || !form.employee_id || !form.service_id) {
+      const resolvedClient = resolveClientFromSearch();
+      const finalClientId = resolvedClient
+        ? String(resolvedClient.id)
+        : form.client_id;
+
+      if (!finalClientId || !form.employee_id || !form.service_id) {
         throw new Error("Debes seleccionar cliente, empleado y servicio.");
       }
 
@@ -344,10 +364,14 @@ export default function NuevaReservaPage() {
         throw new Error("Debes seleccionar una hora disponible.");
       }
 
-      const clientId = Number(form.client_id);
+      const clientId = Number(finalClientId);
       const employeeId = Number(form.employee_id);
       const serviceId = Number(form.service_id);
       const normalizedDate = normalizeDateToISO(form.date);
+
+      if (!Number.isFinite(clientId)) {
+        throw new Error("El cliente seleccionado no es válido.");
+      }
 
       const availability = await getBookingAvailability({
         supabase,
@@ -489,10 +513,12 @@ export default function NuevaReservaPage() {
                 </button>
               </div>
 
-              {selectedClient ? (
+              {selectedClient || resolveClientFromSearch() ? (
                 <p className="mt-2 text-sm text-green-700">
                   Cliente seleccionado:{" "}
-                  <span className="font-medium">{selectedClient.name}</span>
+                  <span className="font-medium">
+                    {(selectedClient ?? resolveClientFromSearch())?.name}
+                  </span>
                 </p>
               ) : (
                 <p className="mt-2 text-sm text-amber-600">
@@ -541,7 +567,11 @@ export default function NuevaReservaPage() {
               </select>
             </div>
 
-            <div className={`rounded-2xl border p-4 ${getDayStatusClasses(dayStatus.tone)}`}>
+            <div
+              className={`rounded-2xl border p-4 ${getDayStatusClasses(
+                dayStatus.tone
+              )}`}
+            >
               <p className="font-semibold">{dayStatus.title}</p>
               <p className="mt-1 text-sm">{dayStatus.detail}</p>
             </div>

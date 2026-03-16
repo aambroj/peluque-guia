@@ -212,14 +212,17 @@ export default async function EditarEmpleadoPage({
             </p>
           </Link>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <Link
+            href={`/reservar/${id}`}
+            className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          >
             <p className="text-lg font-semibold text-zinc-900">
               Reserva pública
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              Controla si este empleado puede aparecer en la reserva online.
+              Ver la página pública de reserva de este empleado.
             </p>
-          </div>
+          </Link>
         </div>
 
         {errorMessage ? (
@@ -303,6 +306,7 @@ export default async function EditarEmpleadoPage({
                   <option value="Ocupado">Ocupado</option>
                   <option value="Descanso">Descanso</option>
                   <option value="Vacaciones">Vacaciones</option>
+                  <option value="Inactivo">Inactivo</option>
                 </select>
               </div>
             </div>
