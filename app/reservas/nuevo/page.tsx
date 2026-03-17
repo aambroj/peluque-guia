@@ -274,21 +274,6 @@ export default function NuevaReservaPage() {
     return clientes.find((c) => String(c.id) === form.client_id) ?? null;
   }, [clientes, form.client_id]);
 
-  const resolveClientFromSearch = useCallback(() => {
-    if (form.client_id) {
-      return clientes.find((c) => String(c.id) === form.client_id) ?? null;
-    }
-
-    const normalizedSearch = normalizeText(clientSearch);
-    if (!normalizedSearch) return null;
-
-    const exactMatch = clientes.find(
-      (cliente) => normalizeText(cliente.name) === normalizedSearch
-    );
-
-    return exactMatch ?? null;
-  }, [clientes, clientSearch, form.client_id]);
-
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -341,19 +326,24 @@ export default function NuevaReservaPage() {
     }, 150);
   };
 
+  const goToNuevoCliente = () => {
+    router.push("/clientes");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      const resolvedClient = resolveClientFromSearch();
-      const finalClientId = resolvedClient
-        ? String(resolvedClient.id)
-        : form.client_id;
+      if (!form.client_id) {
+        throw new Error(
+          "Debes seleccionar un cliente existente o crear uno nuevo."
+        );
+      }
 
-      if (!finalClientId || !form.employee_id || !form.service_id) {
-        throw new Error("Debes seleccionar cliente, empleado y servicio.");
+      if (!form.employee_id || !form.service_id) {
+        throw new Error("Debes seleccionar empleado y servicio.");
       }
 
       if (!form.date) {
@@ -364,7 +354,7 @@ export default function NuevaReservaPage() {
         throw new Error("Debes seleccionar una hora disponible.");
       }
 
-      const clientId = Number(finalClientId);
+      const clientId = Number(form.client_id);
       const employeeId = Number(form.employee_id);
       const serviceId = Number(form.service_id);
       const normalizedDate = normalizeDateToISO(form.date);
@@ -499,30 +489,42 @@ export default function NuevaReservaPage() {
                 ) : null}
               </div>
 
-              <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-zinc-500">
                   Escribe unas letras y elige un cliente del desplegable.
                 </p>
 
-                <button
-                  type="button"
-                  onClick={loadData}
-                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
-                >
-                  Recargar lista
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={goToNuevoCliente}
+                    className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                  >
+                    Nuevo cliente
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={loadData}
+                    className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                  >
+                    Recargar lista
+                  </button>
+                </div>
               </div>
 
-              {selectedClient || resolveClientFromSearch() ? (
+              {selectedClient ? (
                 <p className="mt-2 text-sm text-green-700">
                   Cliente seleccionado:{" "}
-                  <span className="font-medium">
-                    {(selectedClient ?? resolveClientFromSearch())?.name}
-                  </span>
+                  <span className="font-medium">{selectedClient.name}</span>
+                </p>
+              ) : clientSearch.trim() ? (
+                <p className="mt-2 text-sm text-amber-600">
+                  Debes seleccionar un cliente existente o crear uno nuevo.
                 </p>
               ) : (
-                <p className="mt-2 text-sm text-amber-600">
-                  Debes seleccionar un cliente del desplegable.
+                <p className="mt-2 text-sm text-zinc-500">
+                  No hay ningún cliente seleccionado.
                 </p>
               )}
             </div>
