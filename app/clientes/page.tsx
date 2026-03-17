@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
+import { getSupabaseServer } from "@/lib/supabase-server";
 
 type ClientesPageProps = {
   searchParams?: Promise<{
@@ -14,9 +15,37 @@ export default async function ClientesPage({
   const params = (await searchParams) ?? {};
   const q = params.q?.trim().toLowerCase() ?? "";
 
+  const supabase = await getSupabaseServer();
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    redirect("/login?redirectTo=/clientes");
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("business_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError || !profile?.business_id) {
+    return (
+      <section className="px-6 py-8">
+        <div className="mx-auto max-w-4xl rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+          No se ha podido resolver el negocio del usuario actual.
+        </div>
+      </section>
+    );
+  }
+
   const { data: clientes, error } = await supabase
     .from("clientes")
     .select("id, name, phone, visits, last_visit")
+    .eq("business_id", profile.business_id)
     .order("name", { ascending: true });
 
   const clientesFiltrados =

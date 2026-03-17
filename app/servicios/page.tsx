@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabase-browser";
 
 type ServicioRow = {
   id: number;
@@ -53,6 +54,9 @@ function getEmptyNewService(): NewServiceForm {
 }
 
 export default function ServiciosPage() {
+  const router = useRouter();
+
+  const [businessId, setBusinessId] = useState<number | null>(null);
   const [servicios, setServicios] = useState<ServicioFormRow[]>([]);
   const [newService, setNewService] = useState<NewServiceForm>(getEmptyNewService());
   const [loading, setLoading] = useState(true);
@@ -63,16 +67,51 @@ export default function ServiciosPage() {
 
   const savingSet = useMemo(() => new Set(savingIds), [savingIds]);
 
+  const resolveBusinessId = async () => {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseBrowser.auth.getUser();
+
+    if (userError || !user) {
+      router.push("/login?redirectTo=/servicios");
+      return null;
+    }
+
+    const { data: profile, error: profileError } = await supabaseBrowser
+      .from("profiles")
+      .select("business_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError || !profile?.business_id) {
+      setError("No se ha podido resolver el negocio del usuario actual.");
+      return null;
+    }
+
+    return Number(profile.business_id);
+  };
+
   const loadServicios = async () => {
     setLoading(true);
     setError("");
     setSuccess("");
 
-    const { data, error } = await supabase
+    const resolvedBusinessId = await resolveBusinessId();
+
+    if (!resolvedBusinessId) {
+      setLoading(false);
+      return;
+    }
+
+    setBusinessId(resolvedBusinessId);
+
+    const { data, error } = await supabaseBrowser
       .from("servicios")
       .select(
         "id, name, category, price, duration_minutes, description, public_visible"
       )
+      .eq("business_id", resolvedBusinessId)
       .order("id", { ascending: true });
 
     if (error) {
@@ -150,6 +189,11 @@ export default function ServiciosPage() {
     setError("");
     setSuccess("");
 
+    if (!businessId) {
+      setError("No se ha podido resolver el negocio actual.");
+      return false;
+    }
+
     let parsed;
     try {
       parsed = validateServiceData(row);
@@ -169,10 +213,11 @@ export default function ServiciosPage() {
       public_visible: row.public_visible,
     };
 
-    const { error } = await supabase
+    const { error } = await supabaseBrowser
       .from("servicios")
       .update(payload)
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("business_id", businessId);
 
     setSavingIds((prev) => prev.filter((id) => id !== row.id));
 
@@ -212,6 +257,11 @@ export default function ServiciosPage() {
     setError("");
     setSuccess("");
 
+    if (!businessId) {
+      setError("No se ha podido resolver el negocio actual.");
+      return;
+    }
+
     let parsed;
     try {
       parsed = validateServiceData(newService);
@@ -223,6 +273,7 @@ export default function ServiciosPage() {
     setCreating(true);
 
     const payload = {
+      business_id: businessId,
       name: newService.name.trim(),
       category: newService.category.trim() || null,
       price: parsed.priceNumber,
@@ -231,7 +282,7 @@ export default function ServiciosPage() {
       public_visible: newService.public_visible,
     };
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseBrowser
       .from("servicios")
       .insert([payload])
       .select(

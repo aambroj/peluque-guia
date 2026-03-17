@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseServer } from "@/lib/supabase-server";
 
 type NuevoClientePageProps = {
   searchParams?: Promise<{
@@ -18,6 +18,29 @@ export default async function NuevoClientePage({
   async function createCliente(formData: FormData) {
     "use server";
 
+    const supabase = await getSupabaseServer();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      redirect("/login?redirectTo=/clientes/nuevo");
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("business_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError || !profile?.business_id) {
+      redirect(
+        "/clientes/nuevo?error=No+se+ha+podido+resolver+el+negocio+del+usuario"
+      );
+    }
+
     const name = String(formData.get("name") ?? "").trim();
     const phone = String(formData.get("phone") ?? "").trim();
 
@@ -29,15 +52,19 @@ export default async function NuevoClientePage({
       redirect("/clientes/nuevo?error=El+tel%C3%A9fono+es+obligatorio");
     }
 
-    const { data: clienteExistente, error: clienteExistenteError } = await supabase
-      .from("clientes")
-      .select("id")
-      .eq("phone", phone)
-      .maybeSingle();
+    const { data: clienteExistente, error: clienteExistenteError } =
+      await supabase
+        .from("clientes")
+        .select("id")
+        .eq("business_id", profile.business_id)
+        .eq("phone", phone)
+        .maybeSingle();
 
     if (clienteExistenteError) {
       redirect(
-        `/clientes/nuevo?error=${encodeURIComponent(clienteExistenteError.message)}`
+        `/clientes/nuevo?error=${encodeURIComponent(
+          clienteExistenteError.message
+        )}`
       );
     }
 
@@ -46,6 +73,7 @@ export default async function NuevoClientePage({
     }
 
     const { error } = await supabase.from("clientes").insert({
+      business_id: profile.business_id,
       name,
       phone,
       visits: 0,

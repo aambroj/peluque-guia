@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getSupabaseServer } from "@/lib/supabase-server";
 
 type NuevoEmpleadoPageProps = {
   searchParams?: Promise<{
@@ -9,29 +10,7 @@ type NuevoEmpleadoPageProps = {
   }>;
 };
 
-function detectBookingField(row: Record<string, any> | null | undefined) {
-  if (!row) return null;
-
-  const preferredKeys = [
-    "allow_online_booking",
-    "is_bookable_online",
-    "allow_public_booking",
-    "public_booking_enabled",
-    "online_booking_enabled",
-  ];
-
-  for (const key of preferredKeys) {
-    if (key in row) return key;
-  }
-
-  const fallbackKey = Object.keys(row).find((key) =>
-    /(online|public).*(booking|reserve)|booking.*(online|public)|reserv/i.test(
-      key
-    )
-  );
-
-  return fallbackKey ?? null;
-}
+const BOOKING_FIELD_NAME = "public_booking_enabled";
 
 export default async function NuevoEmpleadoPage({
   searchParams,
@@ -39,15 +18,61 @@ export default async function NuevoEmpleadoPage({
   const params = (await searchParams) ?? {};
   const errorMessage = params.error ?? "";
 
-  const { data: muestraEmpleado } = await supabase
-    .from("empleados")
-    .select("*")
-    .limit(1);
+  const supabaseServer = await getSupabaseServer();
 
-  const bookingFieldName = detectBookingField(muestraEmpleado?.[0]);
+  const {
+    data: { user },
+    error: userError,
+  } = await supabaseServer.auth.getUser();
+
+  if (userError || !user) {
+    redirect("/login?redirectTo=/empleados/nuevo");
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("business_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError || !profile?.business_id) {
+    return (
+      <section className="px-6 py-8">
+        <div className="mx-auto max-w-4xl rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+          No se ha podido resolver el negocio del usuario actual.
+        </div>
+      </section>
+    );
+  }
 
   async function createEmpleado(formData: FormData) {
     "use server";
+
+    const supabaseServer = await getSupabaseServer();
+    const supabaseAdmin = getSupabaseAdmin();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseServer.auth.getUser();
+
+    if (userError || !user) {
+      redirect("/login?redirectTo=/empleados/nuevo");
+    }
+
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("business_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError || !profile?.business_id) {
+      redirect(
+        "/empleados/nuevo?error=No+se+ha+podido+resolver+el+negocio+del+usuario"
+      );
+    }
 
     const name = String(formData.get("name") ?? "").trim();
     const role = String(formData.get("role") ?? "").trim();
@@ -63,17 +88,15 @@ export default async function NuevoEmpleadoPage({
     }
 
     const payload: Record<string, any> = {
+      business_id: profile.business_id,
       name,
       role: role || null,
       phone: phone || null,
       status,
+      [BOOKING_FIELD_NAME]: formData.get("online_booking") === "on",
     };
 
-    if (bookingFieldName) {
-      payload[bookingFieldName] = formData.get("online_booking") === "on";
-    }
-
-    const { error } = await supabase.from("empleados").insert(payload);
+    const { error } = await supabaseAdmin.from("empleados").insert(payload);
 
     if (error) {
       redirect(`/empleados/nuevo?error=${encodeURIComponent(error.message)}`);
@@ -190,17 +213,15 @@ export default async function NuevoEmpleadoPage({
               </div>
             </div>
 
-            {bookingFieldName ? (
-              <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-700">
-                <input
-                  type="checkbox"
-                  name="online_booking"
-                  defaultChecked
-                  className="h-4 w-4 rounded border-zinc-300"
-                />
-                Permitir reserva online para este empleado
-              </label>
-            ) : null}
+            <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                name="online_booking"
+                defaultChecked
+                className="h-4 w-4 rounded border-zinc-300"
+              />
+              Permitir reserva online para este empleado
+            </label>
 
             <div className="flex flex-wrap gap-3">
               <button
