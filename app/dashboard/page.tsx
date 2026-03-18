@@ -27,10 +27,19 @@ function getRelationName(value: any, fallback = "-") {
   return getRelation(value)?.name ?? fallback;
 }
 
-function getServicePrice(value: any) {
-  const servicio = getRelation(value);
+function getReservationPrice(reserva: any) {
+  const rawSnapshot = reserva?.price_at_booking;
+  const snapshot =
+    typeof rawSnapshot === "number" ? rawSnapshot : Number(rawSnapshot);
+
+  if (Number.isFinite(snapshot)) {
+    return snapshot;
+  }
+
+  const servicio = getRelation(reserva?.servicio);
   const rawPrice = servicio?.price ?? 0;
   const price = typeof rawPrice === "number" ? rawPrice : Number(rawPrice);
+
   return Number.isFinite(price) ? price : 0;
 }
 
@@ -52,13 +61,16 @@ function formatCurrency(value: number) {
 }
 
 function buildRevenueByEmployee(reservas: any[]) {
-  const revenueMap: Record<string, { name: string; amount: number; reservas: number }> = {};
+  const revenueMap: Record<
+    string,
+    { name: string; amount: number; reservas: number }
+  > = {};
 
   reservas
     .filter((reserva) => reserva.status === "Confirmada")
     .forEach((reserva) => {
       const empleadoNombre = getRelationName(reserva.empleado, "Sin asignar");
-      const price = getServicePrice(reserva.servicio);
+      const price = getReservationPrice(reserva);
 
       revenueMap[empleadoNombre] ??= {
         name: empleadoNombre,
@@ -86,7 +98,9 @@ export default async function DashboardPage() {
   next7Date.setDate(next7Date.getDate() + 7);
   const next7 = toDateValue(next7Date);
 
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthStart = `${now.getFullYear()}-${String(
+    now.getMonth() + 1
+  ).padStart(2, "0")}-01`;
   const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   const monthEnd = toDateValue(monthEndDate);
 
@@ -113,7 +127,7 @@ export default async function DashboardPage() {
 
     supabase
       .from("empleados")
-      .select("id, status")
+      .select("id, status, public_booking_enabled")
       .order("name", { ascending: true }),
 
     supabase.from("servicios").select("id", { count: "exact", head: true }),
@@ -174,6 +188,7 @@ export default async function DashboardPage() {
       .select(`
         id,
         status,
+        price_at_booking,
         empleado:empleados!reservas_employee_id_fkey(id, name),
         servicio:servicios!reservas_service_id_fkey(id, name, price)
       `)
@@ -185,6 +200,7 @@ export default async function DashboardPage() {
         id,
         status,
         date,
+        price_at_booking,
         empleado:empleados!reservas_employee_id_fkey(id, name),
         servicio:servicios!reservas_service_id_fkey(id, name, price)
       `)
@@ -209,14 +225,23 @@ export default async function DashboardPage() {
 
   const empleadosActivosCount =
     (empleadosDetalle ?? []).filter(
-      (empleado: any) => normalizeText(empleado.status ?? "Activo") !== "inactivo"
+      (empleado: any) =>
+        normalizeText(empleado.status ?? "Activo") !== "inactivo"
+    ).length ?? 0;
+
+  const empleadosOnlineCount =
+    (empleadosDetalle ?? []).filter(
+      (empleado: any) =>
+        normalizeText(empleado.status ?? "Activo") !== "inactivo" &&
+        empleado.public_booking_enabled === true
     ).length ?? 0;
 
   const reservasHoy = reservasHoyDetalle ?? [];
   const reservasMes = reservasMesDetalle ?? [];
 
   const confirmadasHoy =
-    reservasHoy.filter((reserva) => reserva.status === "Confirmada").length ?? 0;
+    reservasHoy.filter((reserva) => reserva.status === "Confirmada").length ??
+    0;
 
   const pendientesHoy =
     reservasHoy.filter((reserva) => reserva.status === "Pendiente").length ?? 0;
@@ -253,8 +278,10 @@ export default async function DashboardPage() {
     }
 
     if (reserva.status !== "Cancelada") {
-      empleadosHoyMap[empleadoNombre] = (empleadosHoyMap[empleadoNombre] ?? 0) + 1;
-      serviciosHoyMap[servicioNombre] = (serviciosHoyMap[servicioNombre] ?? 0) + 1;
+      empleadosHoyMap[empleadoNombre] =
+        (empleadosHoyMap[empleadoNombre] ?? 0) + 1;
+      serviciosHoyMap[servicioNombre] =
+        (serviciosHoyMap[servicioNombre] ?? 0) + 1;
     }
   });
 
@@ -308,24 +335,24 @@ export default async function DashboardPage() {
 
           <div className="flex flex-wrap gap-3">
             <Link
-              href="/reservas"
+              href="/reservas/nuevo"
               className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
             >
-              Ver reservas
+              Nueva reserva
             </Link>
 
             <Link
-              href="/empleados"
+              href="/clientes/nuevo"
               className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
             >
-              Ver empleados
+              Nuevo cliente
             </Link>
 
             <Link
-              href="/servicios"
+              href="/empleados/nuevo"
               className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
             >
-              Ver servicios
+              Nuevo empleado
             </Link>
 
             <LogoutButton />
@@ -334,7 +361,9 @@ export default async function DashboardPage() {
 
         {errores.length > 0 ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <p className="font-semibold">Hay una consulta con error en el dashboard.</p>
+            <p className="font-semibold">
+              Hay una consulta con error en el dashboard.
+            </p>
             <div className="mt-2 space-y-1">
               {errores.map((error: any, index) => (
                 <p key={index}>{error.message}</p>
@@ -474,13 +503,13 @@ export default async function DashboardPage() {
 
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-zinc-500">
-              Recaudación hoy
+              Empleados con reserva online
             </p>
             <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
-              {formatCurrency(totalRecaudacionHoy)}
+              {empleadosOnlineCount}
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              Solo reservas confirmadas
+              Disponibles para reservas públicas
             </p>
           </div>
         </div>
@@ -516,6 +545,77 @@ export default async function DashboardPage() {
                   )}`
                 : `Todavía no hay ingresos confirmados en ${mesActualLabel}`}
             </p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="mb-5">
+            <h3 className="text-xl font-semibold text-zinc-900">
+              Crear y gestionar rápido
+            </h3>
+            <p className="text-sm text-zinc-500">
+              Acciones del día a día para trabajar más rápido
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <Link
+              href="/reservas/nuevo"
+              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <p className="text-lg font-semibold text-zinc-900">
+                Nueva reserva
+              </p>
+              <p className="mt-2 text-sm text-zinc-500">
+                Crear una cita manual desde el panel
+              </p>
+            </Link>
+
+            <Link
+              href="/clientes/nuevo"
+              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <p className="text-lg font-semibold text-zinc-900">
+                Nuevo cliente
+              </p>
+              <p className="mt-2 text-sm text-zinc-500">
+                Alta rápida de un cliente nuevo
+              </p>
+            </Link>
+
+            <Link
+              href="/empleados/nuevo"
+              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <p className="text-lg font-semibold text-zinc-900">
+                Nuevo empleado
+              </p>
+              <p className="mt-2 text-sm text-zinc-500">
+                Añadir personal al negocio
+              </p>
+            </Link>
+
+            <Link
+              href="/servicios"
+              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <p className="text-lg font-semibold text-zinc-900">Servicios</p>
+              <p className="mt-2 text-sm text-zinc-500">
+                Crear o cambiar precios y duración
+              </p>
+            </Link>
+
+            <Link
+              href="/reservar"
+              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <p className="text-lg font-semibold text-zinc-900">
+                Reserva pública
+              </p>
+              <p className="mt-2 text-sm text-zinc-500">
+                Abrir el flujo online para clientes
+              </p>
+            </Link>
           </div>
         </div>
 

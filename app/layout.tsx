@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import AppHeader from "@/components/AppHeader";
 
 export const metadata: Metadata = {
   title: "Peluque-Guía",
@@ -19,17 +20,7 @@ export default function RootLayout({
           <Sidebar />
 
           <div className="flex min-h-screen flex-col">
-            <header className="border-b border-zinc-200 bg-white px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-lg font-semibold">Panel de gestión</h1>
-                  <p className="text-sm text-zinc-500">
-                    Administra tu peluquería desde un solo lugar
-                  </p>
-                </div>
-              </div>
-            </header>
-
+            <AppHeader />
             <main className="flex-1">{children}</main>
           </div>
         </div>
