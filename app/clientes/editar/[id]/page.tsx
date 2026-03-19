@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 type EditarClientePageProps = {
   params: Promise<{
@@ -16,6 +16,16 @@ export default async function EditarClientePage({
   params,
   searchParams,
 }: EditarClientePageProps) {
+  const { supabase, user, businessId } = await getServerBusinessContext();
+
+  if (!user) {
+    redirect("/login?redirectTo=/clientes");
+  }
+
+  if (!businessId) {
+    redirect("/registro");
+  }
+
   const { id } = await params;
   const search = (await searchParams) ?? {};
   const errorMessage = search.error ?? "";
@@ -37,6 +47,16 @@ export default async function EditarClientePage({
   async function updateCliente(formData: FormData) {
     "use server";
 
+    const { supabase, user, businessId } = await getServerBusinessContext();
+
+    if (!user) {
+      redirect("/login?redirectTo=/clientes");
+    }
+
+    if (!businessId) {
+      redirect("/registro");
+    }
+
     const clienteIdValue = Number(formData.get("cliente_id"));
     const name = String(formData.get("name") ?? "").trim();
     const phone = String(formData.get("phone") ?? "").trim();
@@ -56,12 +76,36 @@ export default async function EditarClientePage({
     }
 
     if (!Number.isFinite(visits) || visits < 0) {
-      redirect(`/clientes/editar/${id}?error=El+campo+visitas+no+es+v%C3%A1lido`);
+      redirect(
+        `/clientes/editar/${id}?error=El+campo+visitas+no+es+v%C3%A1lido`
+      );
+    }
+
+    const { data: clienteActual, error: clienteActualError } = await supabase
+      .from("clientes")
+      .select("id, business_id")
+      .eq("id", clienteIdValue)
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    if (clienteActualError) {
+      redirect(
+        `/clientes/editar/${id}?error=${encodeURIComponent(
+          clienteActualError.message
+        )}`
+      );
+    }
+
+    if (!clienteActual) {
+      redirect(
+        `/clientes/editar/${id}?error=El+cliente+seleccionado+no+existe+en+tu+negocio`
+      );
     }
 
     const { data: otroCliente, error: otroClienteError } = await supabase
       .from("clientes")
       .select("id")
+      .eq("business_id", businessId)
       .eq("phone", phone)
       .neq("id", clienteIdValue)
       .maybeSingle();
@@ -88,7 +132,8 @@ export default async function EditarClientePage({
         visits,
         last_visit: last_visit || null,
       })
-      .eq("id", clienteIdValue);
+      .eq("id", clienteIdValue)
+      .eq("business_id", businessId);
 
     if (error) {
       redirect(
@@ -107,6 +152,7 @@ export default async function EditarClientePage({
     .from("clientes")
     .select("id, name, phone, visits, last_visit")
     .eq("id", clienteId)
+    .eq("business_id", businessId)
     .maybeSingle();
 
   if (error) {

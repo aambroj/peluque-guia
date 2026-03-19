@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
+type BusinessRow = {
+  id: number;
+  name: string | null;
+  slug: string;
+};
+
 type Empleado = {
   id: number;
+  business_id: number | null;
   name: string;
   status?: string | null;
   public_booking_enabled?: boolean | null;
@@ -10,12 +17,15 @@ type Empleado = {
 
 type Servicio = {
   id: number;
+  business_id: number | null;
   name: string;
   duration_minutes: number | null;
+  public_visible?: boolean | null;
 };
 
 type ScheduleRow = {
   id: string;
+  business_id?: number | null;
   employee_id: number;
   weekday: number;
   start_time: string;
@@ -25,6 +35,7 @@ type ScheduleRow = {
 
 type TimeOffRow = {
   id: string;
+  business_id?: number | null;
   employee_id: number;
   date: string;
   end_date: string | null;
@@ -36,6 +47,7 @@ type TimeOffRow = {
 
 type ReservaRow = {
   id: number;
+  business_id?: number | null;
   employee_id: number;
   date: string;
   time: string;
@@ -55,6 +67,10 @@ type DayColor = "green" | "orange" | "red";
 const SLOT_STEP_MINUTES = 30;
 
 function normalizeStatus(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function normalizeSlug(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
@@ -330,8 +346,24 @@ function buildDayAvailability(params: {
   };
 }
 
-async function getBaseData(employeeId: number, serviceId: number) {
+async function getBaseData(slug: string, employeeId: number, serviceId: number) {
   const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: business, error: businessError } = await supabaseAdmin
+    .from("businesses")
+    .select("id, name, slug")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (businessError) {
+    throw new Error(businessError.message);
+  }
+
+  if (!business) {
+    throw new Error("No se encontró el salón solicitado.");
+  }
+
+  const typedBusiness = business as BusinessRow;
 
   const [
     { data: employee, error: employeeError },
@@ -339,15 +371,17 @@ async function getBaseData(employeeId: number, serviceId: number) {
   ] = await Promise.all([
     supabaseAdmin
       .from("empleados")
-      .select("id, name, status, public_booking_enabled")
+      .select("id, business_id, name, status, public_booking_enabled")
       .eq("id", employeeId)
+      .eq("business_id", typedBusiness.id)
       .eq("public_booking_enabled", true)
       .maybeSingle(),
 
     supabaseAdmin
       .from("servicios")
-      .select("id, name, duration_minutes")
+      .select("id, business_id, name, duration_minutes, public_visible")
       .eq("id", serviceId)
+      .eq("business_id", typedBusiness.id)
       .eq("public_visible", true)
       .maybeSingle(),
   ]);
@@ -361,25 +395,27 @@ async function getBaseData(employeeId: number, serviceId: number) {
   }
 
   const typedEmployee = (employee as Empleado | null) ?? null;
+  const typedService = (service as Servicio | null) ?? null;
 
   if (!typedEmployee || !isEmployeePublicBookable(typedEmployee)) {
     throw new Error("Empleado no disponible para reservas públicas.");
   }
 
-  if (!service) {
+  if (!typedService) {
     throw new Error("Servicio no disponible para reserva online.");
   }
 
   if (
-    !Number.isFinite(service.duration_minutes) ||
-    (service.duration_minutes ?? 0) <= 0
+    !Number.isFinite(typedService.duration_minutes) ||
+    (typedService.duration_minutes ?? 0) <= 0
   ) {
     throw new Error("El servicio no tiene una duración válida.");
   }
 
   return {
+    business: typedBusiness,
     employee: typedEmployee,
-    service: service as Servicio,
+    service: typedService,
   };
 }
 
@@ -389,10 +425,15 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
+    const slug = normalizeSlug(searchParams.get("slug"));
     const employeeId = Number(searchParams.get("employeeId"));
     const serviceId = Number(searchParams.get("serviceId"));
     const date = searchParams.get("date")?.trim() ?? "";
     const month = searchParams.get("month")?.trim() ?? "";
+
+    if (!slug) {
+      return NextResponse.json({ error: "slug no válido." }, { status: 400 });
+    }
 
     if (!Number.isFinite(employeeId) || employeeId <= 0) {
       return NextResponse.json(
@@ -408,7 +449,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { employee, service } = await getBaseData(employeeId, serviceId);
+    const { business, employee, service } = await getBaseData(
+      slug,
+      employeeId,
+      serviceId
+    );
     const serviceDuration = Number(service.duration_minutes);
 
     if (date) {
@@ -428,7 +473,10 @@ export async function GET(request: NextRequest) {
       ] = await Promise.all([
         supabaseAdmin
           .from("employee_schedules")
-          .select("id, employee_id, weekday, start_time, end_time, is_working")
+          .select(
+            "id, business_id, employee_id, weekday, start_time, end_time, is_working"
+          )
+          .eq("business_id", business.id)
           .eq("employee_id", employeeId)
           .eq("weekday", weekday)
           .maybeSingle(),
@@ -436,20 +484,23 @@ export async function GET(request: NextRequest) {
         supabaseAdmin
           .from("employee_time_off")
           .select(
-            "id, employee_id, date, end_date, start_time, end_time, reason, is_full_day"
+            "id, business_id, employee_id, date, end_date, start_time, end_time, reason, is_full_day"
           )
+          .eq("business_id", business.id)
           .eq("employee_id", employeeId),
 
         supabaseAdmin
           .from("reservas")
           .select(`
             id,
+            business_id,
             employee_id,
             date,
             time,
             status,
             servicio:servicios!reservas_service_id_fkey(duration_minutes)
           `)
+          .eq("business_id", business.id)
           .eq("employee_id", employeeId)
           .eq("date", date)
           .neq("status", "Cancelada")
@@ -499,26 +550,32 @@ export async function GET(request: NextRequest) {
       ] = await Promise.all([
         supabaseAdmin
           .from("employee_schedules")
-          .select("id, employee_id, weekday, start_time, end_time, is_working")
+          .select(
+            "id, business_id, employee_id, weekday, start_time, end_time, is_working"
+          )
+          .eq("business_id", business.id)
           .eq("employee_id", employeeId),
 
         supabaseAdmin
           .from("employee_time_off")
           .select(
-            "id, employee_id, date, end_date, start_time, end_time, reason, is_full_day"
+            "id, business_id, employee_id, date, end_date, start_time, end_time, reason, is_full_day"
           )
+          .eq("business_id", business.id)
           .eq("employee_id", employeeId),
 
         supabaseAdmin
           .from("reservas")
           .select(`
             id,
+            business_id,
             employee_id,
             date,
             time,
             status,
             servicio:servicios!reservas_service_id_fkey(duration_minutes)
           `)
+          .eq("business_id", business.id)
           .eq("employee_id", employeeId)
           .gte("date", start)
           .lte("date", end)

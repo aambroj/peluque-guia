@@ -2,19 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabaseBrowser } from "@/lib/supabase-browser";
+
+type ServicioForm = {
+  name: string;
+  category: string;
+  duration_minutes: string;
+  price: string;
+  description: string;
+  public_visible: boolean;
+};
 
 export default function EditarServicioPage() {
   const router = useRouter();
   const params = useParams();
   const id = Number(params.id);
 
-  const [form, setForm] = useState({
+  const [businessId, setBusinessId] = useState<number | null>(null);
+  const [form, setForm] = useState<ServicioForm>({
     name: "",
     category: "",
-    duration: "",
+    duration_minutes: "",
     price: "",
     description: "",
+    public_visible: true,
   });
 
   const [loading, setLoading] = useState(true);
@@ -23,11 +34,50 @@ export default function EditarServicioPage() {
 
   useEffect(() => {
     const fetchServicio = async () => {
-      const { data, error } = await supabase
+      if (Number.isNaN(id)) {
+        setError("ID de servicio no válido.");
+        setLoading(false);
+        return;
+      }
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseBrowser.auth.getUser();
+
+      if (userError || !user) {
+        router.push(`/login?redirectTo=/servicios/editar/${id}`);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabaseBrowser
+        .from("profiles")
+        .select("business_id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        setError(profileError.message || "No se pudo cargar el perfil.");
+        setLoading(false);
+        return;
+      }
+
+      if (!profile?.business_id) {
+        router.push("/registro");
+        return;
+      }
+
+      const resolvedBusinessId = Number(profile.business_id);
+      setBusinessId(resolvedBusinessId);
+
+      const { data, error } = await supabaseBrowser
         .from("servicios")
-        .select("*")
+        .select(
+          "id, name, category, duration_minutes, price, description, public_visible"
+        )
         .eq("id", id)
-        .single();
+        .eq("business_id", resolvedBusinessId)
+        .maybeSingle();
 
       if (error) {
         setError(error.message);
@@ -35,30 +85,41 @@ export default function EditarServicioPage() {
         return;
       }
 
+      if (!data) {
+        setError("No se encontró el servicio.");
+        setLoading(false);
+        return;
+      }
+
       setForm({
         name: data.name ?? "",
         category: data.category ?? "",
-        duration: data.duration ?? "",
-        price: data.price?.toString() ?? "",
+        duration_minutes:
+          data.duration_minutes !== null && data.duration_minutes !== undefined
+            ? String(data.duration_minutes)
+            : "",
+        price:
+          data.price !== null && data.price !== undefined
+            ? String(data.price)
+            : "",
         description: data.description ?? "",
+        public_visible: data.public_visible ?? true,
       });
 
       setLoading(false);
     };
 
-    if (!Number.isNaN(id)) {
-      fetchServicio();
-    }
-  }, [id]);
+    fetchServicio();
+  }, [id, router]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target as HTMLInputElement;
 
     setForm((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
   };
 
@@ -67,22 +128,62 @@ export default function EditarServicioPage() {
     setSaving(true);
     setError("");
 
-    const payload = {
-      ...form,
-      price: form.price === "" ? null : Number(form.price),
-    };
+    try {
+      if (!businessId) {
+        setError("No se ha podido resolver el negocio actual.");
+        return;
+      }
 
-    const { error } = await supabase.from("servicios").update(payload).eq("id", id);
+      const name = form.name.trim();
+      const category = form.category.trim();
+      const description = form.description.trim();
+      const durationNumber = Number(form.duration_minutes);
+      const priceNumber =
+        form.price.trim() === "" ? null : Number(form.price.replace(",", "."));
 
-    setSaving(false);
+      if (!name) {
+        setError("El nombre es obligatorio.");
+        return;
+      }
 
-    if (error) {
-      setError(error.message);
-      return;
+      if (!Number.isFinite(durationNumber) || durationNumber <= 0) {
+        setError("La duración debe ser un número válido mayor que 0.");
+        return;
+      }
+
+      if (
+        priceNumber !== null &&
+        (!Number.isFinite(priceNumber) || priceNumber < 0)
+      ) {
+        setError("El precio no es válido.");
+        return;
+      }
+
+      const payload = {
+        name,
+        category: category || null,
+        duration_minutes: durationNumber,
+        price: priceNumber,
+        description: description || null,
+        public_visible: form.public_visible,
+      };
+
+      const { error } = await supabaseBrowser
+        .from("servicios")
+        .update(payload)
+        .eq("id", id)
+        .eq("business_id", businessId);
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      router.push("/servicios");
+      router.refresh();
+    } finally {
+      setSaving(false);
     }
-
-    router.push("/servicios");
-    router.refresh();
   };
 
   if (loading) {
@@ -132,11 +233,13 @@ export default function EditarServicioPage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-zinc-700">
-                Duración
+                Duración (min)
               </label>
               <input
-                name="duration"
-                value={form.duration}
+                name="duration_minutes"
+                type="number"
+                min="1"
+                value={form.duration_minutes}
                 onChange={handleChange}
                 className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
               />
@@ -150,6 +253,7 @@ export default function EditarServicioPage() {
                 name="price"
                 type="number"
                 step="0.01"
+                min="0"
                 value={form.price}
                 onChange={handleChange}
                 className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
@@ -168,6 +272,16 @@ export default function EditarServicioPage() {
                 className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
               />
             </div>
+
+            <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                name="public_visible"
+                checked={form.public_visible}
+                onChange={handleChange}
+              />
+              Visible online
+            </label>
 
             {error ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">

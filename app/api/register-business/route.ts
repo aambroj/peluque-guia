@@ -21,6 +21,10 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function isValidSlug(value: string) {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+
 export async function POST(request: Request) {
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -46,6 +50,13 @@ export async function POST(request: Request) {
     if (password.length < 6) {
       return NextResponse.json(
         { error: "La contraseña debe tener al menos 6 caracteres." },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidSlug(slug)) {
+      return NextResponse.json(
+        { error: "El identificador del salón no es válido." },
         { status: 400 }
       );
     }
@@ -132,9 +143,20 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (createdBusinessId) {
-      await supabaseAdmin.from("subscriptions").delete().eq("business_id", createdBusinessId);
-      await supabaseAdmin.from("profiles").delete().eq("business_id", createdBusinessId);
-      await supabaseAdmin.from("businesses").delete().eq("id", createdBusinessId);
+      await supabaseAdmin
+        .from("subscriptions")
+        .delete()
+        .eq("business_id", createdBusinessId);
+
+      await supabaseAdmin
+        .from("profiles")
+        .delete()
+        .eq("business_id", createdBusinessId);
+
+      await supabaseAdmin
+        .from("businesses")
+        .delete()
+        .eq("id", createdBusinessId);
     }
 
     if (createdUserId) {

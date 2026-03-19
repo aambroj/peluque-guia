@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 type EditarEmpleadoPageProps = {
   params: Promise<{
@@ -40,6 +41,16 @@ export default async function EditarEmpleadoPage({
   params,
   searchParams,
 }: EditarEmpleadoPageProps) {
+  const { user, businessId } = await getServerBusinessContext();
+
+  if (!user) {
+    redirect("/login?redirectTo=/empleados");
+  }
+
+  if (!businessId) {
+    redirect("/registro");
+  }
+
   const supabaseAdmin = getSupabaseAdmin();
 
   const { id } = await params;
@@ -64,6 +75,7 @@ export default async function EditarEmpleadoPage({
     .from("empleados")
     .select("*")
     .eq("id", empleadoId)
+    .eq("business_id", businessId)
     .maybeSingle();
 
   if (error) {
@@ -98,6 +110,16 @@ export default async function EditarEmpleadoPage({
   async function updateEmpleado(formData: FormData) {
     "use server";
 
+    const { user, businessId } = await getServerBusinessContext();
+
+    if (!user) {
+      redirect("/login?redirectTo=/empleados");
+    }
+
+    if (!businessId) {
+      redirect("/registro");
+    }
+
     const supabaseAdmin = getSupabaseAdmin();
 
     const empleadoIdValue = Number(formData.get("empleado_id"));
@@ -118,6 +140,28 @@ export default async function EditarEmpleadoPage({
       redirect(`/empleados/editar/${id}?error=El+estado+es+obligatorio`);
     }
 
+    const { data: empleadoActual, error: empleadoActualError } =
+      await supabaseAdmin
+        .from("empleados")
+        .select("id, business_id")
+        .eq("id", empleadoIdValue)
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+    if (empleadoActualError) {
+      redirect(
+        `/empleados/editar/${id}?error=${encodeURIComponent(
+          empleadoActualError.message
+        )}`
+      );
+    }
+
+    if (!empleadoActual) {
+      redirect(
+        `/empleados/editar/${id}?error=El+empleado+no+existe+en+tu+negocio`
+      );
+    }
+
     const payload: Record<string, any> = {
       name,
       role: role || null,
@@ -126,13 +170,17 @@ export default async function EditarEmpleadoPage({
     };
 
     if (bookingFieldName) {
-      payload[bookingFieldName] = formData.get("online_booking") === "on";
+      payload[bookingFieldName] =
+        status === "Inactivo"
+          ? false
+          : formData.get("online_booking") === "on";
     }
 
     const { error: updateError } = await supabaseAdmin
       .from("empleados")
       .update(payload)
-      .eq("id", empleadoIdValue);
+      .eq("id", empleadoIdValue)
+      .eq("business_id", businessId);
 
     if (updateError) {
       redirect(
@@ -162,7 +210,8 @@ export default async function EditarEmpleadoPage({
                 Editar empleado
               </h2>
               <p className="mt-2 text-zinc-600">
-                Modifica los datos generales y la disponibilidad de este empleado.
+                Modifica los datos generales y la disponibilidad de este
+                empleado.
               </p>
             </div>
 
@@ -196,7 +245,9 @@ export default async function EditarEmpleadoPage({
             href={`/empleados/editar/${id}/horario`}
             className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
           >
-            <p className="text-lg font-semibold text-zinc-900">Horario semanal</p>
+            <p className="text-lg font-semibold text-zinc-900">
+              Horario semanal
+            </p>
             <p className="mt-2 text-sm text-zinc-500">
               Edita qué días trabaja y su hora de inicio y fin.
             </p>

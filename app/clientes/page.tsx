@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 type ClientesPageProps = {
   searchParams?: Promise<{
@@ -9,51 +9,46 @@ type ClientesPageProps = {
   }>;
 };
 
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 export default async function ClientesPage({
   searchParams,
 }: ClientesPageProps) {
   const params = (await searchParams) ?? {};
-  const q = params.q?.trim().toLowerCase() ?? "";
+  const q = params.q?.trim() ?? "";
+  const normalizedQ = normalizeSearchText(q);
 
-  const supabase = await getSupabaseServer();
+  const { supabase, user, businessId } = await getServerBusinessContext();
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
+  if (!user) {
     redirect("/login?redirectTo=/clientes");
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("business_id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError || !profile?.business_id) {
-    return (
-      <section className="px-6 py-8">
-        <div className="mx-auto max-w-4xl rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          No se ha podido resolver el negocio del usuario actual.
-        </div>
-      </section>
-    );
+  if (!businessId) {
+    redirect("/registro");
   }
 
   const { data: clientes, error } = await supabase
     .from("clientes")
     .select("id, name, phone, visits, last_visit")
-    .eq("business_id", profile.business_id)
+    .eq("business_id", businessId)
     .order("name", { ascending: true });
 
   const clientesFiltrados =
     clientes?.filter((cliente) => {
-      if (!q) return true;
+      if (!normalizedQ) return true;
 
-      const texto = `${cliente.name ?? ""} ${cliente.phone ?? ""}`.toLowerCase();
-      return texto.includes(q);
+      const texto = normalizeSearchText(
+        `${cliente.name ?? ""} ${cliente.phone ?? ""}`
+      );
+
+      return texto.includes(normalizedQ);
     }) ?? [];
 
   return (

@@ -1,13 +1,38 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { redirect } from "next/navigation";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 import LogoutButton from "@/components/LogoutButton";
 import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 
+const REVENUE_STATUSES = new Set(["Confirmada", "Completada"]);
+const MADRID_TIME_ZONE = "Europe/Madrid";
+
 function toDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getMadridDateAtNoonUTC(baseDate = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: MADRID_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(baseDate);
+
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? "0");
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? "0");
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? "0");
+
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 }
 
 function normalizeText(value: string) {
@@ -67,7 +92,7 @@ function buildRevenueByEmployee(reservas: any[]) {
   > = {};
 
   reservas
-    .filter((reserva) => reserva.status === "Confirmada")
+    .filter((reserva) => REVENUE_STATUSES.has(reserva.status))
     .forEach((reserva) => {
       const empleadoNombre = getRelationName(reserva.empleado, "Sin asignar");
       const price = getReservationPrice(reserva);
@@ -90,24 +115,42 @@ function buildRevenueByEmployee(reservas: any[]) {
 }
 
 export default async function DashboardPage() {
-  const now = new Date();
+  const { supabase, user, businessId } = await getServerBusinessContext();
 
-  const today = toDateValue(now);
+  if (!user) {
+    redirect("/login");
+  }
 
-  const next7Date = new Date(now);
-  next7Date.setDate(next7Date.getDate() + 7);
-  const next7 = toDateValue(next7Date);
+  if (!businessId) {
+    redirect("/registro");
+  }
 
-  const monthStart = `${now.getFullYear()}-${String(
-    now.getMonth() + 1
+  const madridToday = getMadridDateAtNoonUTC();
+  const today = toDateValue(madridToday);
+  const next7 = toDateValue(addDays(madridToday, 7));
+
+  const monthStart = `${madridToday.getUTCFullYear()}-${String(
+    madridToday.getUTCMonth() + 1
   ).padStart(2, "0")}-01`;
-  const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  const monthEndDate = new Date(
+    Date.UTC(
+      madridToday.getUTCFullYear(),
+      madridToday.getUTCMonth() + 1,
+      0,
+      12,
+      0,
+      0
+    )
+  );
+
   const monthEnd = toDateValue(monthEndDate);
 
   const mesActualLabel = new Intl.DateTimeFormat("es-ES", {
+    timeZone: MADRID_TIME_ZONE,
     month: "long",
     year: "numeric",
-  }).format(now);
+  }).format(new Date());
 
   const [
     { count: clientesCount, error: clientesError },
@@ -123,42 +166,54 @@ export default async function DashboardPage() {
     { data: reservasHoyDetalle, error: reservasHoyDetalleError },
     { data: reservasMesDetalle, error: reservasMesDetalleError },
   ] = await Promise.all([
-    supabase.from("clientes").select("id", { count: "exact", head: true }),
+    supabase
+      .from("clientes")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId),
 
     supabase
       .from("empleados")
       .select("id, status, public_booking_enabled")
+      .eq("business_id", businessId)
       .order("name", { ascending: true }),
 
-    supabase.from("servicios").select("id", { count: "exact", head: true }),
+    supabase
+      .from("servicios")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId),
 
     supabase
       .from("reservas")
       .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
       .eq("date", today),
 
     supabase
       .from("reservas")
       .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
       .gte("date", today)
       .lte("date", next7),
 
     supabase
       .from("reservas")
       .select("id", { count: "exact", head: true })
-      .gte("date", today)
+      .eq("business_id", businessId)
+      .gt("date", today)
       .eq("status", "Confirmada"),
 
     supabase
       .from("reservas")
       .select("id", { count: "exact", head: true })
-      .gte("date", today)
+      .eq("business_id", businessId)
+      .gt("date", today)
       .eq("status", "Pendiente"),
 
     supabase
       .from("reservas")
       .select("id", { count: "exact", head: true })
-      .gte("date", today)
+      .eq("business_id", businessId)
+      .gt("date", today)
       .eq("status", "Cancelada"),
 
     supabase
@@ -172,7 +227,9 @@ export default async function DashboardPage() {
         servicio:servicios!reservas_service_id_fkey(id, name, price),
         empleado:empleados!reservas_employee_id_fkey(id, name)
       `)
+      .eq("business_id", businessId)
       .gte("date", today)
+      .neq("status", "Cancelada")
       .order("date", { ascending: true })
       .order("time", { ascending: true })
       .limit(5),
@@ -180,6 +237,7 @@ export default async function DashboardPage() {
     supabase
       .from("clientes")
       .select("*")
+      .eq("business_id", businessId)
       .order("id", { ascending: false })
       .limit(5),
 
@@ -192,6 +250,7 @@ export default async function DashboardPage() {
         empleado:empleados!reservas_employee_id_fkey(id, name),
         servicio:servicios!reservas_service_id_fkey(id, name, price)
       `)
+      .eq("business_id", businessId)
       .eq("date", today),
 
     supabase
@@ -204,6 +263,7 @@ export default async function DashboardPage() {
         empleado:empleados!reservas_employee_id_fkey(id, name),
         servicio:servicios!reservas_service_id_fkey(id, name, price)
       `)
+      .eq("business_id", businessId)
       .gte("date", monthStart)
       .lte("date", monthEnd),
   ]);
@@ -240,8 +300,7 @@ export default async function DashboardPage() {
   const reservasMes = reservasMesDetalle ?? [];
 
   const confirmadasHoy =
-    reservasHoy.filter((reserva) => reserva.status === "Confirmada").length ??
-    0;
+    reservasHoy.filter((reserva) => reserva.status === "Confirmada").length ?? 0;
 
   const pendientesHoy =
     reservasHoy.filter((reserva) => reserva.status === "Pendiente").length ?? 0;
@@ -249,11 +308,20 @@ export default async function DashboardPage() {
   const canceladasHoy =
     reservasHoy.filter((reserva) => reserva.status === "Cancelada").length ?? 0;
 
+  const completadasHoy =
+    reservasHoy.filter((reserva) => reserva.status === "Completada").length ?? 0;
+
   const empleadosHoyMap: Record<string, number> = {};
   const serviciosHoyMap: Record<string, number> = {};
   const actividadPorEmpleadoMap: Record<
     string,
-    { total: number; confirmadas: number; pendientes: number; canceladas: number }
+    {
+      total: number;
+      confirmadas: number;
+      pendientes: number;
+      canceladas: number;
+      completadas: number;
+    }
   > = {};
 
   reservasHoy.forEach((reserva) => {
@@ -265,6 +333,7 @@ export default async function DashboardPage() {
       confirmadas: 0,
       pendientes: 0,
       canceladas: 0,
+      completadas: 0,
     };
 
     actividadPorEmpleadoMap[empleadoNombre].total += 1;
@@ -275,6 +344,8 @@ export default async function DashboardPage() {
       actividadPorEmpleadoMap[empleadoNombre].pendientes += 1;
     } else if (reserva.status === "Cancelada") {
       actividadPorEmpleadoMap[empleadoNombre].canceladas += 1;
+    } else if (reserva.status === "Completada") {
+      actividadPorEmpleadoMap[empleadoNombre].completadas += 1;
     }
 
     if (reserva.status !== "Cancelada") {
@@ -408,9 +479,7 @@ export default async function DashboardPage() {
             <p className="mt-3 text-4xl font-bold tracking-tight text-zinc-900">
               {reservasHoyCount ?? 0}
             </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              Citas con fecha de hoy
-            </p>
+            <p className="mt-2 text-sm text-zinc-500">Citas con fecha de hoy</p>
           </div>
         </div>
 
@@ -433,7 +502,7 @@ export default async function DashboardPage() {
               {confirmadasFuturasCount ?? 0}
             </p>
             <p className="mt-2 text-sm text-emerald-700/80">
-              Citas futuras listas para atender
+              Citas posteriores a hoy listas para atender
             </p>
           </div>
 
@@ -445,7 +514,7 @@ export default async function DashboardPage() {
               {pendientesFuturasCount ?? 0}
             </p>
             <p className="mt-2 text-sm text-amber-700/80">
-              Pendientes de confirmar
+              Pendientes de confirmar después de hoy
             </p>
           </div>
 
@@ -457,7 +526,7 @@ export default async function DashboardPage() {
               {canceladasFuturasCount ?? 0}
             </p>
             <p className="mt-2 text-sm text-rose-700/80">
-              Citas futuras anuladas
+              Citas posteriores a hoy anuladas
             </p>
           </div>
         </div>
@@ -469,7 +538,7 @@ export default async function DashboardPage() {
               {confirmadasHoy} confirmadas · {pendientesHoy} pendientes
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              {canceladasHoy} canceladas registradas hoy
+              {completadasHoy} completadas · {canceladasHoy} canceladas
             </p>
           </div>
 
@@ -527,7 +596,7 @@ export default async function DashboardPage() {
                 ? `${topRecaudacionHoy.name} lidera hoy con ${formatCurrency(
                     topRecaudacionHoy.amount
                   )}`
-                : "Todavía no hay ingresos confirmados hoy"}
+                : "Todavía no hay ingresos registrados hoy"}
             </p>
           </div>
 
@@ -543,7 +612,7 @@ export default async function DashboardPage() {
                 ? `${topRecaudacionMes.name} lidera ${mesActualLabel} con ${formatCurrency(
                     topRecaudacionMes.amount
                   )}`
-                : `Todavía no hay ingresos confirmados en ${mesActualLabel}`}
+                : `Todavía no hay ingresos registrados en ${mesActualLabel}`}
             </p>
           </div>
         </div>
@@ -627,7 +696,7 @@ export default async function DashboardPage() {
                   Recaudación por empleado hoy
                 </h3>
                 <p className="text-sm text-zinc-500">
-                  Ingreso confirmado del día actual
+                  Ingreso contabilizado del día actual
                 </p>
               </div>
             </div>
@@ -644,7 +713,7 @@ export default async function DashboardPage() {
                         {empleado.name}
                       </p>
                       <p className="mt-1 text-sm text-zinc-500">
-                        {empleado.reservas} reserva(s) confirmada(s)
+                        {empleado.reservas} reserva(s) contabilizada(s)
                       </p>
                     </div>
 
@@ -659,7 +728,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
-                No hay ingresos confirmados hoy.
+                No hay ingresos registrados hoy.
               </div>
             )}
           </div>
@@ -671,7 +740,7 @@ export default async function DashboardPage() {
                   Recaudación por empleado del mes
                 </h3>
                 <p className="text-sm text-zinc-500">
-                  Ingreso confirmado acumulado en {mesActualLabel}
+                  Ingreso contabilizado acumulado en {mesActualLabel}
                 </p>
               </div>
             </div>
@@ -688,7 +757,7 @@ export default async function DashboardPage() {
                         {empleado.name}
                       </p>
                       <p className="mt-1 text-sm text-zinc-500">
-                        {empleado.reservas} reserva(s) confirmada(s)
+                        {empleado.reservas} reserva(s) contabilizada(s)
                       </p>
                     </div>
 
@@ -703,7 +772,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
-                No hay ingresos confirmados este mes.
+                No hay ingresos registrados este mes.
               </div>
             )}
           </div>
@@ -753,6 +822,9 @@ export default async function DashboardPage() {
                     </span>
                     <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-700">
                       {empleado.pendientes} pendientes
+                    </span>
+                    <span className="rounded-full bg-sky-100 px-3 py-1 font-medium text-sky-700">
+                      {empleado.completadas} completadas
                     </span>
                     <span className="rounded-full bg-rose-100 px-3 py-1 font-medium text-rose-700">
                       {empleado.canceladas} canceladas

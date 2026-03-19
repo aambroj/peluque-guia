@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 type PublicBookingBody = {
+  slug?: string;
+
   client_name?: string;
   client_phone?: string;
   client_email?: string;
@@ -33,8 +35,23 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeSlug(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
 function normalizeStatus(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function toPriceNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(",", "."));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return null;
 }
 
 function parseTimeToMinutes(time: string) {
@@ -56,6 +73,27 @@ function parseTimeToMinutes(time: string) {
   }
 
   return hours * 60 + minutes;
+}
+
+function minutesToTimeString(totalMinutes: number) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0"
+  )}:00`;
 }
 
 function extractMinutesFromUnknown(value: unknown) {
@@ -129,11 +167,20 @@ function dateIsWithinRange(
   return targetDate >= startDate && targetDate <= finalEndDate;
 }
 
+function getLocalDateValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export async function POST(request: Request) {
   const supabaseAdmin = getSupabaseAdmin();
 
   try {
     const body = (await request.json()) as PublicBookingBody;
+
+    const slug = normalizeSlug(body.slug);
 
     const client_name = normalizeText(body.client_name || body.clientName);
     const client_phone = normalizeText(body.client_phone || body.phone);
@@ -152,6 +199,13 @@ export async function POST(request: Request) {
       : body.serviceId
       ? Number(body.serviceId)
       : null;
+
+    if (!slug) {
+      return NextResponse.json(
+        { error: "Falta el identificador del salón." },
+        { status: 400 }
+      );
+    }
 
     if (!client_name) {
       return NextResponse.json(
@@ -204,8 +258,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const today = new Date();
-    const todayText = today.toISOString().split("T")[0];
+    const todayText = getLocalDateValue();
 
     if (date < todayText) {
       return NextResponse.json(
@@ -223,6 +276,28 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: business, error: businessError } = await supabaseAdmin
+      .from("businesses")
+      .select("id, name, slug")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (businessError) {
+      return NextResponse.json(
+        { error: `Error al validar el salón: ${businessError.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!business) {
+      return NextResponse.json(
+        { error: "No se ha encontrado el salón solicitado." },
+        { status: 404 }
+      );
+    }
+
+    const businessId = business.id;
+
     const [
       { data: empleado, error: empleadoError },
       { data: servicio, error: servicioError },
@@ -232,8 +307,9 @@ export async function POST(request: Request) {
     ] = await Promise.all([
       supabaseAdmin
         .from("empleados")
-        .select("id, name, status, public_booking_enabled")
+        .select("id, business_id, name, status, public_booking_enabled")
         .eq("id", employee_id)
+        .eq("business_id", businessId)
         .eq("public_booking_enabled", true)
         .maybeSingle(),
 
@@ -241,6 +317,7 @@ export async function POST(request: Request) {
         .from("servicios")
         .select("*")
         .eq("id", service_id)
+        .eq("business_id", businessId)
         .eq("public_visible", true)
         .maybeSingle(),
 
@@ -262,11 +339,15 @@ export async function POST(request: Request) {
         .from("reservas")
         .select(`
           id,
+          business_id,
           date,
           time,
+          start_time,
+          end_time,
           status,
           servicio:servicios!reservas_service_id_fkey(*)
         `)
+        .eq("business_id", businessId)
         .eq("employee_id", employee_id)
         .eq("date", date)
         .neq("status", "Cancelada")
@@ -296,7 +377,9 @@ export async function POST(request: Request) {
 
     if (timeOffError) {
       return NextResponse.json(
-        { error: `Error al comprobar bloqueos/vacaciones: ${timeOffError.message}` },
+        {
+          error: `Error al comprobar bloqueos/vacaciones: ${timeOffError.message}`,
+        },
         { status: 500 }
       );
     }
@@ -314,7 +397,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "El empleado seleccionado no existe o no está disponible para reserva online.",
+            "El empleado seleccionado no existe o no está disponible para reserva online en este salón.",
         },
         { status: 400 }
       );
@@ -340,7 +423,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "El servicio seleccionado no existe o no está visible para reserva online.",
+            "El servicio seleccionado no existe o no está visible para reserva online en este salón.",
         },
         { status: 400 }
       );
@@ -358,7 +441,30 @@ export async function POST(request: Request) {
       );
     }
 
+    const priceAtBooking = toPriceNumber((servicio as any).price);
+
+    if (priceAtBooking === null || priceAtBooking < 0) {
+      return NextResponse.json(
+        {
+          error:
+            "El servicio seleccionado no tiene un precio válido para guardar la reserva.",
+        },
+        { status: 400 }
+      );
+    }
+
     const requestedEnd = requestedStart + requestedDuration;
+    const normalizedStartTime = minutesToTimeString(requestedStart);
+    const normalizedEndTime = minutesToTimeString(requestedEnd);
+
+    if (!normalizedStartTime || !normalizedEndTime) {
+      return NextResponse.json(
+        {
+          error: "No se ha podido calcular correctamente la hora de la reserva.",
+        },
+        { status: 400 }
+      );
+    }
 
     if (!horarioEmpleado || !horarioEmpleado.is_working) {
       return NextResponse.json(
@@ -443,19 +549,27 @@ export async function POST(request: Request) {
     }
 
     for (const reserva of reservasExistentes ?? []) {
-      const existingStart = parseTimeToMinutes(reserva.time);
+      const existingStartText = normalizeText(
+        (reserva as any).start_time || (reserva as any).time
+      );
+      const existingStart = parseTimeToMinutes(existingStartText);
 
       if (existingStart === null) continue;
 
-      const servicioExistente = Array.isArray(reserva.servicio)
-        ? reserva.servicio[0]
-        : reserva.servicio;
+      let existingEnd = parseTimeToMinutes(
+        normalizeText((reserva as any).end_time)
+      );
 
-      const existingDuration = getServiceDurationMinutes(servicioExistente);
+      if (existingEnd === null || existingEnd <= existingStart) {
+        const servicioExistente = Array.isArray(reserva.servicio)
+          ? reserva.servicio[0]
+          : reserva.servicio;
 
-      if (!existingDuration) continue;
+        const existingDuration = getServiceDurationMinutes(servicioExistente);
 
-      const existingEnd = existingStart + existingDuration;
+        if (!existingDuration) continue;
+        existingEnd = existingStart + existingDuration;
+      }
 
       if (
         rangesOverlap(
@@ -481,7 +595,8 @@ export async function POST(request: Request) {
     const { data: clienteExistente, error: clienteExistenteError } =
       await supabaseAdmin
         .from("clientes")
-        .select("id, visits")
+        .select("id, business_id, visits")
+        .eq("business_id", businessId)
         .eq("phone", telefonoNormalizado)
         .maybeSingle();
 
@@ -503,11 +618,14 @@ export async function POST(request: Request) {
           last_visit: date,
           visits: (clienteExistente.visits ?? 0) + 1,
         })
-        .eq("id", clientId);
+        .eq("id", clientId)
+        .eq("business_id", businessId);
 
       if (updateClienteError) {
         return NextResponse.json(
-          { error: `Error al actualizar cliente: ${updateClienteError.message}` },
+          {
+            error: `Error al actualizar cliente: ${updateClienteError.message}`,
+          },
           { status: 500 }
         );
       }
@@ -516,6 +634,7 @@ export async function POST(request: Request) {
         await supabaseAdmin
           .from("clientes")
           .insert({
+            business_id: businessId,
             name: client_name,
             phone: telefonoNormalizado,
             last_visit: date,
@@ -538,15 +657,22 @@ export async function POST(request: Request) {
       await supabaseAdmin
         .from("reservas")
         .insert({
+          business_id: businessId,
           client_id: clientId,
           employee_id,
           service_id,
           date,
-          time,
+          time: normalizedStartTime,
+          start_time: normalizedStartTime,
+          end_time: normalizedEndTime,
           status: "Pendiente",
           notes: notes || null,
+          price_at_booking: priceAtBooking,
+          booking_source: "public",
         })
-        .select("id, date, time, status")
+        .select(
+          "id, business_id, date, time, start_time, end_time, status, price_at_booking, booking_source"
+        )
         .single();
 
     if (insertReservaError) {
@@ -564,8 +690,11 @@ export async function POST(request: Request) {
         booking: {
           id: nuevaReserva.id,
           date: nuevaReserva.date,
-          start_time: nuevaReserva.time,
+          start_time: nuevaReserva.start_time ?? nuevaReserva.time,
+          end_time: nuevaReserva.end_time,
           status: nuevaReserva.status,
+          price_at_booking: nuevaReserva.price_at_booking,
+          booking_source: nuevaReserva.booking_source,
         },
       },
       { status: 201 }

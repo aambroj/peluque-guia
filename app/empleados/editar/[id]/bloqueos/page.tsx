@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 type BloqueosPageProps = {
   params: Promise<{
@@ -16,6 +17,7 @@ type BloqueosPageProps = {
 type TimeOffRow = {
   id: string;
   employee_id: number;
+  business_id?: number | null;
   date: string;
   end_date: string | null;
   start_time: string | null;
@@ -38,6 +40,16 @@ export default async function EmpleadoBloqueosPage({
   params,
   searchParams,
 }: BloqueosPageProps) {
+  const { user, businessId } = await getServerBusinessContext();
+
+  if (!user) {
+    redirect("/login?redirectTo=/empleados");
+  }
+
+  if (!businessId) {
+    redirect("/registro");
+  }
+
   const supabaseAdmin = getSupabaseAdmin();
 
   const { id } = await params;
@@ -57,6 +69,16 @@ export default async function EmpleadoBloqueosPage({
   async function createBlock(formData: FormData) {
     "use server";
 
+    const { user, businessId } = await getServerBusinessContext();
+
+    if (!user) {
+      redirect(`/login?redirectTo=/empleados/editar/${id}/bloqueos`);
+    }
+
+    if (!businessId) {
+      redirect("/registro");
+    }
+
     const supabaseAdmin = getSupabaseAdmin();
 
     const employeeIdValue = Number(formData.get("employee_id"));
@@ -69,6 +91,28 @@ export default async function EmpleadoBloqueosPage({
 
     if (!Number.isFinite(employeeIdValue)) {
       redirect(`/empleados/editar/${id}/bloqueos?error=Empleado+inv%C3%A1lido`);
+    }
+
+    const { data: empleadoActual, error: empleadoActualError } =
+      await supabaseAdmin
+        .from("empleados")
+        .select("id, business_id")
+        .eq("id", employeeIdValue)
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+    if (empleadoActualError) {
+      redirect(
+        `/empleados/editar/${id}/bloqueos?error=${encodeURIComponent(
+          empleadoActualError.message
+        )}`
+      );
+    }
+
+    if (!empleadoActual) {
+      redirect(
+        `/empleados/editar/${id}/bloqueos?error=El+empleado+no+existe+en+tu+negocio`
+      );
     }
 
     if (!reason) {
@@ -106,6 +150,7 @@ export default async function EmpleadoBloqueosPage({
     }
 
     const { error } = await supabaseAdmin.from("employee_time_off").insert({
+      business_id: businessId,
       employee_id: employeeIdValue,
       date: startDate,
       end_date: endDate,
@@ -134,6 +179,16 @@ export default async function EmpleadoBloqueosPage({
   async function deleteBlock(formData: FormData) {
     "use server";
 
+    const { user, businessId } = await getServerBusinessContext();
+
+    if (!user) {
+      redirect(`/login?redirectTo=/empleados/editar/${id}/bloqueos`);
+    }
+
+    if (!businessId) {
+      redirect("/registro");
+    }
+
     const supabaseAdmin = getSupabaseAdmin();
 
     const blockId = String(formData.get("block_id") ?? "").trim();
@@ -142,10 +197,35 @@ export default async function EmpleadoBloqueosPage({
       redirect(`/empleados/editar/${id}/bloqueos?error=Bloqueo+inv%C3%A1lido`);
     }
 
+    const { data: bloqueoActual, error: bloqueoActualError } =
+      await supabaseAdmin
+        .from("employee_time_off")
+        .select("id, employee_id, business_id")
+        .eq("id", blockId)
+        .eq("employee_id", empleadoId)
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+    if (bloqueoActualError) {
+      redirect(
+        `/empleados/editar/${id}/bloqueos?error=${encodeURIComponent(
+          bloqueoActualError.message
+        )}`
+      );
+    }
+
+    if (!bloqueoActual) {
+      redirect(
+        `/empleados/editar/${id}/bloqueos?error=El+bloqueo+no+existe+en+tu+negocio`
+      );
+    }
+
     const { error } = await supabaseAdmin
       .from("employee_time_off")
       .delete()
-      .eq("id", blockId);
+      .eq("id", blockId)
+      .eq("employee_id", empleadoId)
+      .eq("business_id", businessId);
 
     if (error) {
       redirect(
@@ -170,13 +250,15 @@ export default async function EmpleadoBloqueosPage({
       .from("empleados")
       .select("id, name")
       .eq("id", empleadoId)
+      .eq("business_id", businessId)
       .maybeSingle(),
     supabaseAdmin
       .from("employee_time_off")
       .select(
-        "id, employee_id, date, end_date, start_time, end_time, reason, is_full_day"
+        "id, employee_id, business_id, date, end_date, start_time, end_time, reason, is_full_day"
       )
       .eq("employee_id", empleadoId)
+      .eq("business_id", businessId)
       .order("date", { ascending: true }),
   ]);
 

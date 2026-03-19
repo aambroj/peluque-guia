@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 type NuevoClientePageProps = {
   searchParams?: Promise<{
@@ -15,30 +15,27 @@ export default async function NuevoClientePage({
   const params = (await searchParams) ?? {};
   const errorMessage = params.error ?? "";
 
+  const { user, businessId } = await getServerBusinessContext();
+
+  if (!user) {
+    redirect("/login?redirectTo=/clientes/nuevo");
+  }
+
+  if (!businessId) {
+    redirect("/registro");
+  }
+
   async function createCliente(formData: FormData) {
     "use server";
 
-    const supabase = await getSupabaseServer();
+    const { supabase, user, businessId } = await getServerBusinessContext();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
+    if (!user) {
       redirect("/login?redirectTo=/clientes/nuevo");
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("business_id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError || !profile?.business_id) {
-      redirect(
-        "/clientes/nuevo?error=No+se+ha+podido+resolver+el+negocio+del+usuario"
-      );
+    if (!businessId) {
+      redirect("/registro");
     }
 
     const name = String(formData.get("name") ?? "").trim();
@@ -56,7 +53,7 @@ export default async function NuevoClientePage({
       await supabase
         .from("clientes")
         .select("id")
-        .eq("business_id", profile.business_id)
+        .eq("business_id", businessId)
         .eq("phone", phone)
         .maybeSingle();
 
@@ -73,7 +70,7 @@ export default async function NuevoClientePage({
     }
 
     const { error } = await supabase.from("clientes").insert({
-      business_id: profile.business_id,
+      business_id: businessId,
       name,
       phone,
       visits: 0,

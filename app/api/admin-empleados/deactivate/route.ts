@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 export async function POST(request: NextRequest) {
   try {
+    const { user, businessId } = await getServerBusinessContext();
+
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+    }
+
+    if (!businessId) {
+      return NextResponse.json(
+        { error: "No se ha podido resolver el negocio del usuario." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const id = Number(body?.id);
 
@@ -14,53 +27,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseServer = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll() {
-            // No necesitamos escribir cookies aquí.
-          },
-        },
-      }
-    );
+    const supabaseAdmin = getSupabaseAdmin();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseServer.auth.getUser();
+    const { data: empleado, error: empleadoError } = await supabaseAdmin
+      .from("empleados")
+      .select("id, business_id")
+      .eq("id", id)
+      .eq("business_id", businessId)
+      .maybeSingle();
 
-    if (userError || !user) {
+    if (empleadoError) {
       return NextResponse.json(
-        { error: "No autorizado." },
-        { status: 401 }
+        { error: empleadoError.message },
+        { status: 500 }
       );
     }
 
-    const supabaseAdmin = getSupabaseAdmin();
-
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("business_id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError || !profile?.business_id) {
+    if (!empleado) {
       return NextResponse.json(
-        { error: "No se ha podido resolver el negocio del usuario." },
-        { status: 403 }
+        { error: "El empleado no existe en tu negocio." },
+        { status: 404 }
       );
     }
 
     const { error } = await supabaseAdmin
       .from("empleados")
-      .update({ status: "Inactivo" })
+      .update({
+        status: "Inactivo",
+        public_booking_enabled: false,
+      })
       .eq("id", id)
-      .eq("business_id", profile.business_id);
+      .eq("business_id", businessId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

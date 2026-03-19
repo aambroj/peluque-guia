@@ -27,6 +27,10 @@ export function getStatusBadgeClasses(status: string) {
     return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
   }
 
+  if (status === "Completada") {
+    return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
+  }
+
   if (status === "Activo") {
     return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
   }

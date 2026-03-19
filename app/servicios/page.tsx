@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
@@ -58,7 +58,9 @@ export default function ServiciosPage() {
 
   const [businessId, setBusinessId] = useState<number | null>(null);
   const [servicios, setServicios] = useState<ServicioFormRow[]>([]);
-  const [newService, setNewService] = useState<NewServiceForm>(getEmptyNewService());
+  const [newService, setNewService] = useState<NewServiceForm>(
+    getEmptyNewService()
+  );
   const [loading, setLoading] = useState(true);
   const [savingIds, setSavingIds] = useState<number[]>([]);
   const [creating, setCreating] = useState(false);
@@ -67,7 +69,7 @@ export default function ServiciosPage() {
 
   const savingSet = useMemo(() => new Set(savingIds), [savingIds]);
 
-  const resolveBusinessId = async () => {
+  const resolveBusinessId = useCallback(async () => {
     const {
       data: { user },
       error: userError,
@@ -84,15 +86,20 @@ export default function ServiciosPage() {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (profileError || !profile?.business_id) {
-      setError("No se ha podido resolver el negocio del usuario actual.");
+    if (profileError) {
+      setError(profileError.message || "No se pudo cargar el perfil.");
+      return null;
+    }
+
+    if (!profile?.business_id) {
+      router.push("/registro");
       return null;
     }
 
     return Number(profile.business_id);
-  };
+  }, [router]);
 
-  const loadServicios = async () => {
+  const loadServicios = useCallback(async () => {
     setLoading(true);
     setError("");
     setSuccess("");
@@ -132,11 +139,11 @@ export default function ServiciosPage() {
 
     setServicios(rows);
     setLoading(false);
-  };
+  }, [resolveBusinessId]);
 
   useEffect(() => {
     loadServicios();
-  }, []);
+  }, [loadServicios]);
 
   const updateRow = (
     id: number,
@@ -176,7 +183,9 @@ export default function ServiciosPage() {
     }
 
     if (!Number.isFinite(durationNumber) || durationNumber <= 0) {
-      throw new Error(`El servicio "${data.name}" debe tener una duración válida.`);
+      throw new Error(
+        `El servicio "${data.name}" debe tener una duración válida.`
+      );
     }
 
     return {
@@ -338,13 +347,23 @@ export default function ServiciosPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={saveAll}
-              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              Guardar todos
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={loadServicios}
+                className="rounded-xl border border-zinc-300 px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+              >
+                Recargar
+              </button>
+
+              <button
+                type="button"
+                onClick={saveAll}
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Guardar todos
+              </button>
+            </div>
           </div>
         </div>
 
@@ -458,114 +477,120 @@ export default function ServiciosPage() {
           </div>
         </section>
 
-        <div className="space-y-4">
-          {servicios.map((row) => {
-            const isSaving = savingSet.has(row.id);
+        {servicios.length === 0 ? (
+          <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm text-sm text-zinc-500">
+            No hay servicios registrados todavía.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {servicios.map((row) => {
+              const isSaving = savingSet.has(row.id);
 
-            return (
-              <article
-                key={row.id}
-                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
-              >
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-zinc-700">
-                      Nombre
-                    </label>
-                    <input
-                      value={row.name}
-                      onChange={(e) =>
-                        updateRow(row.id, "name", e.target.value)
-                      }
-                      className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-zinc-700">
-                      Categoría
-                    </label>
-                    <input
-                      value={row.category}
-                      onChange={(e) =>
-                        updateRow(row.id, "category", e.target.value)
-                      }
-                      className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-zinc-700">
-                      Precio
-                    </label>
-                    <input
-                      inputMode="decimal"
-                      value={row.price}
-                      onChange={(e) =>
-                        updateRow(row.id, "price", e.target.value)
-                      }
-                      placeholder="Ej. 15 o 15.50"
-                      className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-zinc-700">
-                      Duración (min)
-                    </label>
-                    <input
-                      inputMode="numeric"
-                      value={row.duration_minutes}
-                      onChange={(e) =>
-                        updateRow(row.id, "duration_minutes", e.target.value)
-                      }
-                      placeholder="Ej. 30"
-                      className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_auto]">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-zinc-700">
-                      Descripción
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={row.description}
-                      onChange={(e) =>
-                        updateRow(row.id, "description", e.target.value)
-                      }
-                      className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                    />
-                  </div>
-
-                  <div className="flex flex-col justify-between gap-4">
-                    <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+              return (
+                <article
+                  key={row.id}
+                  className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
+                >
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-zinc-700">
+                        Nombre
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={row.public_visible}
+                        value={row.name}
                         onChange={(e) =>
-                          updateRow(row.id, "public_visible", e.target.checked)
+                          updateRow(row.id, "name", e.target.value)
                         }
+                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
                       />
-                      Visible online
-                    </label>
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => saveRow(row)}
-                      disabled={isSaving}
-                      className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                    >
-                      {isSaving ? "Guardando..." : "Guardar servicio"}
-                    </button>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-zinc-700">
+                        Categoría
+                      </label>
+                      <input
+                        value={row.category}
+                        onChange={(e) =>
+                          updateRow(row.id, "category", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-zinc-700">
+                        Precio
+                      </label>
+                      <input
+                        inputMode="decimal"
+                        value={row.price}
+                        onChange={(e) =>
+                          updateRow(row.id, "price", e.target.value)
+                        }
+                        placeholder="Ej. 15 o 15.50"
+                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-zinc-700">
+                        Duración (min)
+                      </label>
+                      <input
+                        inputMode="numeric"
+                        value={row.duration_minutes}
+                        onChange={(e) =>
+                          updateRow(row.id, "duration_minutes", e.target.value)
+                        }
+                        placeholder="Ej. 30"
+                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                      />
+                    </div>
                   </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_auto]">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-zinc-700">
+                        Descripción
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={row.description}
+                        onChange={(e) =>
+                          updateRow(row.id, "description", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                      />
+                    </div>
+
+                    <div className="flex flex-col justify-between gap-4">
+                      <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                        <input
+                          type="checkbox"
+                          checked={row.public_visible}
+                          onChange={(e) =>
+                            updateRow(row.id, "public_visible", e.target.checked)
+                          }
+                        />
+                        Visible online
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => saveRow(row)}
+                        disabled={isSaving}
+                        className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                      >
+                        {isSaving ? "Guardando..." : "Guardar servicio"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { redirect } from "next/navigation";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 import DeleteReservaButton from "@/components/DeleteReservaButton";
 import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 
@@ -52,9 +53,23 @@ function compareStrings(a: unknown, b: unknown) {
   });
 }
 
+function isActiveEmployee(status: unknown) {
+  return normalizeSearchText(status) !== "inactivo";
+}
+
 export default async function ReservasPage({
   searchParams,
 }: ReservasPageProps) {
+  const { supabase, user, businessId } = await getServerBusinessContext();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!businessId) {
+    redirect("/registro");
+  }
+
   const params = (await searchParams) ?? {};
 
   const q = params.q?.trim() ?? "";
@@ -85,6 +100,7 @@ export default async function ReservasPage({
       empleado:empleados!reservas_employee_id_fkey(id, name),
       servicio:servicios!reservas_service_id_fkey(id, name)
     `)
+    .eq("business_id", businessId)
     .order("date", { ascending: true })
     .order("time", { ascending: true });
 
@@ -102,11 +118,15 @@ export default async function ReservasPage({
 
   const [
     { data: reservas, error },
-    { data: empleados, error: empleadosError },
+    { data: empleadosRaw, error: empleadosError },
     { data: agendaReservas, error: agendaError },
   ] = await Promise.all([
     query,
-    supabase.from("empleados").select("id, name").order("name", { ascending: true }),
+    supabase
+      .from("empleados")
+      .select("id, name, status")
+      .eq("business_id", businessId)
+      .order("name", { ascending: true }),
     supabase
       .from("reservas")
       .select(`
@@ -118,9 +138,13 @@ export default async function ReservasPage({
         empleado:empleados!reservas_employee_id_fkey(id, name),
         servicio:servicios!reservas_service_id_fkey(id, name)
       `)
+      .eq("business_id", businessId)
       .eq("date", agendaDate)
       .order("time", { ascending: true }),
   ]);
+
+  const empleados =
+    (empleadosRaw ?? []).filter((empleado: any) => isActiveEmployee(empleado.status)) ?? [];
 
   const reservasFiltradas =
     reservas?.filter((reserva) => {
@@ -216,6 +240,22 @@ export default async function ReservasPage({
     reservasOrdenadas.map((reserva) => getRelationName(reserva.empleado, "Sin asignar"))
   ).size;
 
+  const confirmadasCount = reservasOrdenadas.filter(
+    (r) => r.status === "Confirmada"
+  ).length;
+
+  const pendientesCount = reservasOrdenadas.filter(
+    (r) => r.status === "Pendiente"
+  ).length;
+
+  const canceladasCount = reservasOrdenadas.filter(
+    (r) => r.status === "Cancelada"
+  ).length;
+
+  const completadasCount = reservasOrdenadas.filter(
+    (r) => r.status === "Completada"
+  ).length;
+
   function buildSortHref(field: SortField) {
     const nextDir: SortDirection =
       sort === field ? (dir === "asc" ? "desc" : "asc") : "asc";
@@ -267,7 +307,7 @@ export default async function ReservasPage({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Reservas visibles</p>
             <p className="mt-3 text-3xl font-bold">{reservasOrdenadas.length}</p>
@@ -275,23 +315,22 @@ export default async function ReservasPage({
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Confirmadas</p>
-            <p className="mt-3 text-3xl font-bold">
-              {reservasOrdenadas.filter((r) => r.status === "Confirmada").length}
-            </p>
+            <p className="mt-3 text-3xl font-bold">{confirmadasCount}</p>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Pendientes</p>
-            <p className="mt-3 text-3xl font-bold">
-              {reservasOrdenadas.filter((r) => r.status === "Pendiente").length}
-            </p>
+            <p className="mt-3 text-3xl font-bold">{pendientesCount}</p>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-zinc-500">Canceladas</p>
-            <p className="mt-3 text-3xl font-bold">
-              {reservasOrdenadas.filter((r) => r.status === "Cancelada").length}
-            </p>
+            <p className="mt-3 text-3xl font-bold">{canceladasCount}</p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-zinc-500">Completadas</p>
+            <p className="mt-3 text-3xl font-bold">{completadasCount}</p>
           </div>
 
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -327,7 +366,7 @@ export default async function ReservasPage({
                 className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-black"
               >
                 <option value="">Todos los empleados</option>
-                {(empleados ?? []).map((empleado) => (
+                {empleados.map((empleado: any) => (
                   <option key={empleado.id} value={empleado.id}>
                     {empleado.name}
                   </option>
@@ -350,6 +389,7 @@ export default async function ReservasPage({
                 <option value="Pendiente">Pendiente</option>
                 <option value="Confirmada">Confirmada</option>
                 <option value="Cancelada">Cancelada</option>
+                <option value="Completada">Completada</option>
               </select>
 
               <button className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100">
@@ -379,10 +419,7 @@ export default async function ReservasPage({
             <div>
               <h3 className="text-xl font-semibold">Agenda del día</h3>
               <p className="text-sm text-zinc-500">
-                Reservas del{" "}
-                <span className="font-medium text-zinc-700">
-                  {formatDate(agendaDate)}
-                </span>{" "}
+                Reservas del <span className="font-medium text-zinc-700">{formatDate(agendaDate)}</span>{" "}
                 agrupadas por empleado
               </p>
             </div>

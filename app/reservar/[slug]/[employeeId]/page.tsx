@@ -10,8 +10,15 @@ type Servicio = {
   name: string;
 };
 
+type BusinessPublic = {
+  id: number;
+  name: string | null;
+  slug: string;
+};
+
 type Empleado = {
   id: number;
+  business_id?: number | null;
   name: string;
   status?: string | null;
   public_booking_enabled?: boolean | null;
@@ -73,6 +80,10 @@ type CalendarCell =
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 function normalizeStatus(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function normalizeSlug(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
@@ -198,10 +209,49 @@ function getCalendarCells(month: string, selectedDate: string, days: DayItem[]) 
   return cells;
 }
 
+function getBestSelectedDate(days: DayItem[], month: string) {
+  const firstFutureWithSlots = days.find(
+    (item) => !isPastDate(item.date) && item.slots > 0
+  );
+
+  if (firstFutureWithSlots) {
+    return firstFutureWithSlots.date;
+  }
+
+  const firstFutureDay = days.find((item) => !isPastDate(item.date));
+
+  if (firstFutureDay) {
+    return firstFutureDay.date;
+  }
+
+  return `${month}-01`;
+}
+
+function buildAvailabilityUrl(params: {
+  slug: string;
+  employeeId: number;
+  serviceId: string;
+  date?: string;
+  month?: string;
+}) {
+  const search = new URLSearchParams();
+  search.set("slug", normalizeSlug(params.slug));
+  search.set("employeeId", String(params.employeeId));
+  search.set("serviceId", params.serviceId);
+
+  if (params.date) search.set("date", params.date);
+  if (params.month) search.set("month", params.month);
+
+  return `/api/public-availability?${search.toString()}`;
+}
+
 export default function PublicEmployeeBookingPage() {
-  const params = useParams<{ employeeId: string }>();
+  const params = useParams<{ slug: string; employeeId: string }>();
+
+  const slug = normalizeSlug(String(params.slug ?? ""));
   const employeeId = Number(params.employeeId);
 
+  const [business, setBusiness] = useState<BusinessPublic | null>(null);
   const [employee, setEmployee] = useState<Empleado | null>(null);
   const [services, setServices] = useState<Servicio[]>([]);
   const [serviceId, setServiceId] = useState("");
@@ -230,16 +280,41 @@ export default function PublicEmployeeBookingPage() {
       setError("");
 
       try {
+        if (!slug) {
+          throw new Error("Negocio público no válido.");
+        }
+
+        if (!Number.isFinite(employeeId) || employeeId <= 0) {
+          throw new Error("Empleado inválido.");
+        }
+
+        const { data: businessData, error: businessError } = await supabase
+          .from("businesses")
+          .select("id, name, slug")
+          .eq("slug", slug)
+          .maybeSingle();
+
+        if (businessError) {
+          throw new Error(businessError.message);
+        }
+
+        if (!businessData) {
+          throw new Error("No se encontró el salón solicitado.");
+        }
+
         const [employeeRes, servicesRes] = await Promise.all([
           supabase
             .from("empleados")
-            .select("id, name, status, public_booking_enabled")
+            .select("id, business_id, name, status, public_booking_enabled")
             .eq("id", employeeId)
+            .eq("business_id", businessData.id)
             .eq("public_booking_enabled", true)
             .maybeSingle(),
+
           supabase
             .from("servicios")
             .select("id, name")
+            .eq("business_id", businessData.id)
             .eq("public_visible", true)
             .order("name", { ascending: true }),
         ]);
@@ -260,13 +335,21 @@ export default function PublicEmployeeBookingPage() {
 
         const loadedServices = (servicesRes.data ?? []) as Servicio[];
 
+        if (loadedServices.length === 0) {
+          throw new Error(
+            "No hay servicios disponibles para reserva online en este salón."
+          );
+        }
+
+        setBusiness(businessData as BusinessPublic);
         setEmployee(loadedEmployee);
         setServices(loadedServices);
-
-        if (loadedServices.length > 0) {
-          setServiceId(String(loadedServices[0].id));
-        }
+        setServiceId(String(loadedServices[0].id));
       } catch (err) {
+        setBusiness(null);
+        setEmployee(null);
+        setServices([]);
+        setServiceId("");
         setError(
           err instanceof Error ? err.message : "Error cargando datos públicos."
         );
@@ -275,24 +358,26 @@ export default function PublicEmployeeBookingPage() {
       }
     };
 
-    if (Number.isFinite(employeeId) && employeeId > 0) {
-      loadBase();
-    } else {
-      setError("Empleado inválido.");
-      setLoadingBase(false);
-    }
-  }, [employeeId]);
+    loadBase();
+  }, [slug, employeeId]);
 
   useEffect(() => {
     const loadMonth = async () => {
-      if (!serviceId || !employee || !isEmployeePublicBookable(employee)) return;
+      if (!serviceId || !employee || !isEmployeePublicBookable(employee) || !slug) {
+        return;
+      }
 
       setLoadingMonth(true);
       setError("");
 
       try {
         const response = await fetch(
-          `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&month=${month}`
+          buildAvailabilityUrl({
+            slug,
+            employeeId,
+            serviceId,
+            month,
+          })
         );
 
         const data: MonthAvailabilityResponse | { error: string } =
@@ -311,8 +396,7 @@ export default function PublicEmployeeBookingPage() {
           !isPastDate(selectedDate);
 
         if (!selectedIsInMonth || !selectedStillValid) {
-          const firstAvailableDate = result.days[0]?.date ?? `${month}-01`;
-          setSelectedDate(firstAvailableDate);
+          setSelectedDate(getBestSelectedDate(result.days, month));
           setSelectedTime("");
         }
       } catch (err) {
@@ -332,11 +416,17 @@ export default function PublicEmployeeBookingPage() {
     };
 
     loadMonth();
-  }, [employeeId, employee, serviceId, month, selectedDate]);
+  }, [slug, employeeId, employee, serviceId, month]);
 
   useEffect(() => {
     const loadDay = async () => {
-      if (!serviceId || !selectedDate || !employee || !isEmployeePublicBookable(employee)) {
+      if (
+        !serviceId ||
+        !selectedDate ||
+        !employee ||
+        !isEmployeePublicBookable(employee) ||
+        !slug
+      ) {
         setDaySlots([]);
         setDaySummary(null);
         setSelectedTime("");
@@ -362,7 +452,12 @@ export default function PublicEmployeeBookingPage() {
 
       try {
         const response = await fetch(
-          `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&date=${selectedDate}`
+          buildAvailabilityUrl({
+            slug,
+            employeeId,
+            serviceId,
+            date: selectedDate,
+          })
         );
 
         const data: DayAvailabilityResponse | { error: string } =
@@ -401,7 +496,7 @@ export default function PublicEmployeeBookingPage() {
     };
 
     loadDay();
-  }, [employeeId, employee, serviceId, selectedDate]);
+  }, [slug, employeeId, employee, serviceId, selectedDate]);
 
   const selectedDayFromMonth = useMemo(
     () => monthDays.find((item) => item.date === selectedDate) ?? null,
@@ -422,6 +517,10 @@ export default function PublicEmployeeBookingPage() {
     setSuccess("");
 
     try {
+      if (!slug) {
+        throw new Error("Negocio público no válido.");
+      }
+
       if (!serviceId) {
         throw new Error("Selecciona un servicio.");
       }
@@ -452,6 +551,7 @@ export default function PublicEmployeeBookingPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          slug,
           employeeId,
           serviceId: Number(serviceId),
           date: selectedDate,
@@ -492,7 +592,12 @@ export default function PublicEmployeeBookingPage() {
       setNotes("");
 
       const refreshDay = await fetch(
-        `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&date=${selectedDate}`
+        buildAvailabilityUrl({
+          slug,
+          employeeId,
+          serviceId,
+          date: selectedDate,
+        })
       );
 
       const refreshDayText = await refreshDay.text();
@@ -510,7 +615,12 @@ export default function PublicEmployeeBookingPage() {
       }
 
       const refreshMonth = await fetch(
-        `/api/public-availability?employeeId=${employeeId}&serviceId=${serviceId}&month=${month}`
+        buildAvailabilityUrl({
+          slug,
+          employeeId,
+          serviceId,
+          month,
+        })
       );
 
       const refreshMonthText = await refreshMonth.text();
@@ -544,7 +654,7 @@ export default function PublicEmployeeBookingPage() {
       <main className="min-h-screen bg-zinc-50 px-4 py-8 md:px-6 md:py-10">
         <div className="mx-auto max-w-4xl space-y-6">
           <Link
-            href="/reservar"
+            href={slug ? `/reservar/${slug}` : "/reservar"}
             className="inline-flex rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
           >
             ← Volver a profesionales
@@ -563,7 +673,7 @@ export default function PublicEmployeeBookingPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            href="/reservar"
+            href={slug ? `/reservar/${slug}` : "/reservar"}
             className="inline-flex rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
           >
             ← Volver a profesionales
@@ -573,7 +683,8 @@ export default function PublicEmployeeBookingPage() {
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8">
           <h1 className="text-3xl font-bold tracking-tight">Reserva online</h1>
           <p className="mt-2 text-zinc-600">
-            Reserva tu cita con {employee?.name ?? "el empleado seleccionado"}.
+            {business?.name ? `${business.name} · ` : ""}
+            Reserva tu cita con {employee?.name ?? "el profesional seleccionado"}.
           </p>
         </section>
 
@@ -650,9 +761,7 @@ export default function PublicEmployeeBookingPage() {
                 </div>
 
                 {loadingMonth ? (
-                  <span className="text-sm text-zinc-500">
-                    Cargando mes...
-                  </span>
+                  <span className="text-sm text-zinc-500">Cargando mes...</span>
                 ) : null}
               </div>
 

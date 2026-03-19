@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabaseBrowser } from "@/lib/supabase-browser";
 import { getBookingAvailability } from "@/lib/bookingAvailability";
 import {
   buildBookingTimes,
@@ -30,11 +30,6 @@ type DayStatus = {
   tone: "gray" | "green" | "orange" | "red";
   title: string;
   detail: string;
-};
-
-type ClientesResponse = {
-  clientes: Cliente[];
-  error?: string;
 };
 
 function getDayStatusClasses(tone: DayStatus["tone"]) {
@@ -75,6 +70,7 @@ export default function NuevaReservaPage() {
     date: "",
     time: "",
     status: "Pendiente",
+    notes: "",
   });
 
   const [loadingData, setLoadingData] = useState(true);
@@ -93,30 +89,61 @@ export default function NuevaReservaPage() {
     setError("");
 
     try {
-      const [clientesHttpRes, empleadosRes, serviciosRes] = await Promise.all([
-        fetch("/api/admin-clientes", {
-          method: "GET",
-          cache: "no-store",
-        }),
-        supabase
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseBrowser.auth.getUser();
+
+      if (userError) {
+        throw new Error(userError.message);
+      }
+
+      if (!user) {
+        router.push("/login?redirectTo=/reservas/nuevo");
+        return;
+      }
+
+      const { data: profileRaw, error: profileError } = await supabaseBrowser
+        .from("profiles")
+        .select("business_id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        throw new Error(profileError.message);
+      }
+
+      const businessId =
+        (profileRaw as { business_id?: number | null } | null)?.business_id ??
+        null;
+
+      if (!businessId) {
+        router.push("/registro");
+        return;
+      }
+
+      const [clientesRes, empleadosRes, serviciosRes] = await Promise.all([
+        supabaseBrowser
+          .from("clientes")
+          .select("id, name")
+          .eq("business_id", businessId)
+          .order("name", { ascending: true }),
+        supabaseBrowser
           .from("empleados")
           .select("id, name, status")
+          .eq("business_id", businessId)
           .order("name", { ascending: true }),
-        supabase
+        supabaseBrowser
           .from("servicios")
           .select("id, name")
+          .eq("business_id", businessId)
           .order("name", { ascending: true }),
       ]);
 
-      const clientesJson = (await clientesHttpRes.json()) as ClientesResponse;
-
-      if (!clientesHttpRes.ok) {
-        throw new Error(clientesJson.error || "Error al cargar clientes");
-      }
-
-      if (empleadosRes.error || serviciosRes.error) {
+      if (clientesRes.error || empleadosRes.error || serviciosRes.error) {
         throw new Error(
-          empleadosRes.error?.message ||
+          clientesRes.error?.message ||
+            empleadosRes.error?.message ||
             serviciosRes.error?.message ||
             "Error al cargar datos"
         );
@@ -129,7 +156,7 @@ export default function NuevaReservaPage() {
         )
         .map(({ id, name }) => ({ id, name }));
 
-      setClientes(clientesJson.clientes ?? []);
+      setClientes((clientesRes.data ?? []) as Cliente[]);
       setEmpleados(empleadosActivos);
       setServicios((serviciosRes.data ?? []) as Servicio[]);
     } catch (err) {
@@ -140,7 +167,7 @@ export default function NuevaReservaPage() {
     } finally {
       setLoadingData(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     loadData();
@@ -164,7 +191,7 @@ export default function NuevaReservaPage() {
 
       try {
         const result = await getBookingAvailability({
-          supabase,
+          supabase: supabaseBrowser,
           employeeId: Number(form.employee_id),
           serviceId: Number(form.service_id),
           date: form.date,
@@ -275,7 +302,9 @@ export default function NuevaReservaPage() {
   }, [clientes, form.client_id]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => {
     const { name, value } = e.target;
     setError("");
@@ -327,7 +356,7 @@ export default function NuevaReservaPage() {
   };
 
   const goToNuevoCliente = () => {
-    router.push("/clientes");
+    router.push("/clientes/nuevo");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -364,7 +393,7 @@ export default function NuevaReservaPage() {
       }
 
       const availability = await getBookingAvailability({
-        supabase,
+        supabase: supabaseBrowser,
         employeeId,
         serviceId,
         date: normalizedDate,
@@ -399,6 +428,7 @@ export default function NuevaReservaPage() {
         start_time,
         end_time,
         status: form.status,
+        notes: form.notes.trim(),
       };
 
       const response = await fetch("/api/admin-reservas", {
@@ -645,7 +675,22 @@ export default function NuevaReservaPage() {
                 <option value="Pendiente">Pendiente</option>
                 <option value="Confirmada">Confirmada</option>
                 <option value="Cancelada">Cancelada</option>
+                <option value="Completada">Completada</option>
               </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-zinc-700">
+                Notas
+              </label>
+              <textarea
+                name="notes"
+                value={form.notes}
+                onChange={handleChange}
+                rows={4}
+                className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                placeholder="Añade observaciones si lo necesitas"
+              />
             </div>
 
             {error ? (

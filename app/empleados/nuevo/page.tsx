@@ -2,7 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { getSupabaseServer } from "@/lib/supabase-server";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 type NuevoEmpleadoPageProps = {
   searchParams?: Promise<{
@@ -18,60 +18,28 @@ export default async function NuevoEmpleadoPage({
   const params = (await searchParams) ?? {};
   const errorMessage = params.error ?? "";
 
-  const supabaseServer = await getSupabaseServer();
+  const { user, businessId } = await getServerBusinessContext();
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabaseServer.auth.getUser();
-
-  if (userError || !user) {
+  if (!user) {
     redirect("/login?redirectTo=/empleados/nuevo");
   }
 
-  const supabaseAdmin = getSupabaseAdmin();
-
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from("profiles")
-    .select("business_id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError || !profile?.business_id) {
-    return (
-      <section className="px-6 py-8">
-        <div className="mx-auto max-w-4xl rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          No se ha podido resolver el negocio del usuario actual.
-        </div>
-      </section>
-    );
+  if (!businessId) {
+    redirect("/registro");
   }
 
   async function createEmpleado(formData: FormData) {
     "use server";
 
-    const supabaseServer = await getSupabaseServer();
+    const { user, businessId } = await getServerBusinessContext();
     const supabaseAdmin = getSupabaseAdmin();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseServer.auth.getUser();
-
-    if (userError || !user) {
+    if (!user) {
       redirect("/login?redirectTo=/empleados/nuevo");
     }
 
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("business_id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError || !profile?.business_id) {
-      redirect(
-        "/empleados/nuevo?error=No+se+ha+podido+resolver+el+negocio+del+usuario"
-      );
+    if (!businessId) {
+      redirect("/registro");
     }
 
     const name = String(formData.get("name") ?? "").trim();
@@ -88,7 +56,7 @@ export default async function NuevoEmpleadoPage({
     }
 
     const payload: Record<string, any> = {
-      business_id: profile.business_id,
+      business_id: businessId,
       name,
       role: role || null,
       phone: phone || null,

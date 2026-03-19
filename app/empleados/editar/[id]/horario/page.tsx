@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getServerBusinessContext } from "@/lib/supabase-server";
 
 type HorarioPageProps = {
   params: Promise<{
@@ -26,6 +27,7 @@ const DAYS = [
 type ScheduleRow = {
   id: string;
   employee_id: number;
+  business_id?: number | null;
   weekday: number;
   start_time: string;
   end_time: string;
@@ -41,6 +43,18 @@ export default async function EmpleadoHorarioPage({
   params,
   searchParams,
 }: HorarioPageProps) {
+  const { user, businessId } = await getServerBusinessContext();
+
+  if (!user) {
+    redirect("/login?redirectTo=/empleados");
+  }
+
+  if (!businessId) {
+    redirect("/registro");
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+
   const { id } = await params;
   const query = (await searchParams) ?? {};
   const empleadoId = Number(id);
@@ -58,45 +72,110 @@ export default async function EmpleadoHorarioPage({
   async function saveSchedule(formData: FormData) {
     "use server";
 
+    const { user, businessId } = await getServerBusinessContext();
+
+    if (!user) {
+      redirect("/login?redirectTo=/empleados");
+    }
+
+    if (!businessId) {
+      redirect("/registro");
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
     const employeeIdValue = Number(formData.get("employee_id"));
 
     if (!Number.isFinite(employeeIdValue)) {
       redirect(`/empleados/editar/${id}/horario?error=Empleado+inv%C3%A1lido`);
     }
 
-    const rows = DAYS.map((day) => {
-      const isWorking = formData.get(`is_working_${day.dbWeekday}`) === "on";
-      const startTime = String(
-        formData.get(`start_time_${day.dbWeekday}`) ?? ""
-      ).trim();
-      const endTime = String(
-        formData.get(`end_time_${day.dbWeekday}`) ?? ""
-      ).trim();
+    const { data: empleadoActual, error: empleadoActualError } =
+      await supabaseAdmin
+        .from("empleados")
+        .select("id, business_id")
+        .eq("id", employeeIdValue)
+        .eq("business_id", businessId)
+        .maybeSingle();
 
-      if (isWorking && (!startTime || !endTime)) {
-        throw new Error(`Debes indicar horario para ${day.label}.`);
-      }
-
-      return {
-        employee_id: employeeIdValue,
-        weekday: day.dbWeekday,
-        start_time: isWorking ? startTime : "00:00",
-        end_time: isWorking ? endTime : "00:00",
-        is_working: isWorking,
-      };
-    });
-
-    await supabase
-      .from("employee_schedules")
-      .delete()
-      .eq("employee_id", employeeIdValue);
-
-    const { error } = await supabase.from("employee_schedules").insert(rows);
-
-    if (error) {
+    if (empleadoActualError) {
       redirect(
         `/empleados/editar/${id}/horario?error=${encodeURIComponent(
-          error.message
+          empleadoActualError.message
+        )}`
+      );
+    }
+
+    if (!empleadoActual) {
+      redirect(
+        `/empleados/editar/${id}/horario?error=El+empleado+no+existe+en+tu+negocio`
+      );
+    }
+
+    let rows: Array<{
+      business_id: number;
+      employee_id: number;
+      weekday: number;
+      start_time: string;
+      end_time: string;
+      is_working: boolean;
+    }>;
+
+    try {
+      rows = DAYS.map((day) => {
+        const isWorking = formData.get(`is_working_${day.dbWeekday}`) === "on";
+        const startTime = String(
+          formData.get(`start_time_${day.dbWeekday}`) ?? ""
+        ).trim();
+        const endTime = String(
+          formData.get(`end_time_${day.dbWeekday}`) ?? ""
+        ).trim();
+
+        if (isWorking && (!startTime || !endTime)) {
+          throw new Error(`Debes indicar horario para ${day.label}.`);
+        }
+
+        return {
+          business_id: businessId,
+          employee_id: employeeIdValue,
+          weekday: day.dbWeekday,
+          start_time: isWorking ? startTime : "00:00",
+          end_time: isWorking ? endTime : "00:00",
+          is_working: isWorking,
+        };
+      });
+    } catch (error) {
+      redirect(
+        `/empleados/editar/${id}/horario?error=${encodeURIComponent(
+          error instanceof Error
+            ? error.message
+            : "Error al validar el horario"
+        )}`
+      );
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("employee_schedules")
+      .delete()
+      .eq("employee_id", employeeIdValue)
+      .eq("business_id", businessId);
+
+    if (deleteError) {
+      redirect(
+        `/empleados/editar/${id}/horario?error=${encodeURIComponent(
+          deleteError.message
+        )}`
+      );
+    }
+
+    const { error: insertError } = await supabaseAdmin
+      .from("employee_schedules")
+      .insert(rows);
+
+    if (insertError) {
+      redirect(
+        `/empleados/editar/${id}/horario?error=${encodeURIComponent(
+          insertError.message
         )}`
       );
     }
@@ -113,11 +192,18 @@ export default async function EmpleadoHorarioPage({
     { data: empleado, error: empleadoError },
     { data: horarios, error: horariosError },
   ] = await Promise.all([
-    supabase.from("empleados").select("id, name").eq("id", empleadoId).maybeSingle(),
-    supabase
+    supabaseAdmin
+      .from("empleados")
+      .select("id, name")
+      .eq("id", empleadoId)
+      .eq("business_id", businessId)
+      .maybeSingle(),
+
+    supabaseAdmin
       .from("employee_schedules")
-      .select("id, employee_id, weekday, start_time, end_time, is_working")
-      .eq("employee_id", empleadoId),
+      .select("id, employee_id, business_id, weekday, start_time, end_time, is_working")
+      .eq("employee_id", empleadoId)
+      .eq("business_id", businessId),
   ]);
 
   if (empleadoError || !empleado) {
@@ -209,7 +295,9 @@ export default async function EmpleadoHorarioPage({
                       <input
                         type="time"
                         name={`start_time_${day.dbWeekday}`}
-                        defaultValue={normalizeTimeForInput(row?.start_time) || "09:00"}
+                        defaultValue={
+                          normalizeTimeForInput(row?.start_time) || "09:00"
+                        }
                         className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
                       />
                     </div>
@@ -221,7 +309,9 @@ export default async function EmpleadoHorarioPage({
                       <input
                         type="time"
                         name={`end_time_${day.dbWeekday}`}
-                        defaultValue={normalizeTimeForInput(row?.end_time) || "18:00"}
+                        defaultValue={
+                          normalizeTimeForInput(row?.end_time) || "18:00"
+                        }
                         className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:border-black"
                       />
                     </div>
