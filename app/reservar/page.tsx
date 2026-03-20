@@ -17,14 +17,19 @@ export default function ReservarPage() {
           </p>
 
           <p className="mt-2 text-zinc-600">
-            Ese enlace tendrá un formato parecido a:
+            Ese enlace suele tener un formato parecido a:
           </p>
 
           <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-800">
-            /reservar/nombre-del-salon/ID-DEL-EMPLEADO
+            /reservar/nombre-del-salon
           </div>
 
           <p className="mt-4 text-sm text-zinc-500">
+            Después podrás elegir el profesional disponible y ver su calendario
+            de reservas.
+          </p>
+
+          <p className="mt-2 text-sm text-zinc-500">
             Si has llegado aquí sin enlace, pide al salón que te comparta su
             página pública de reserva.
           </p>

@@ -16,6 +16,10 @@ type BusinessPublic = {
   slug: string;
 };
 
+type PublicBusinessResponse = {
+  business: BusinessPublic;
+};
+
 type Empleado = {
   id: number;
   business_id?: number | null;
@@ -338,19 +342,24 @@ export default function PublicEmployeeBookingPage() {
           throw new Error("Empleado inválido.");
         }
 
-        const { data: businessData, error: businessError } = await supabase
-          .from("businesses")
-          .select("id, name, slug")
-          .eq("slug", slug)
-          .maybeSingle();
+        const businessResponse = await fetch(
+          `/api/public-business?slug=${encodeURIComponent(slug)}`
+        );
 
-        if (businessError) {
-          throw new Error(businessError.message);
+        const businessPayload:
+          | PublicBusinessResponse
+          | {
+              error?: string;
+            } = await businessResponse.json();
+
+        if (!businessResponse.ok || !("business" in businessPayload)) {
+          throw new Error(
+            ("error" in businessPayload && businessPayload.error) ||
+              "No se encontró el salón solicitado."
+          );
         }
 
-        if (!businessData) {
-          throw new Error("No se encontró el salón solicitado.");
-        }
+        const businessData = businessPayload.business;
 
         const [employeeRes, servicesRes, schedulesRes] = await Promise.all([
           supabase
@@ -411,7 +420,7 @@ export default function PublicEmployeeBookingPage() {
           );
         }
 
-        setBusiness(businessData as BusinessPublic);
+        setBusiness(businessData);
         setEmployee(loadedEmployee);
         setServices(loadedServices);
         setServiceId(String(loadedServices[0].id));

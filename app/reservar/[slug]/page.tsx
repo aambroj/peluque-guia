@@ -11,6 +11,10 @@ type BusinessPublic = {
   slug: string;
 };
 
+type PublicBusinessResponse = {
+  business: BusinessPublic;
+};
+
 type EmpleadoPublico = {
   id: number;
   business_id: number | null;
@@ -32,6 +36,10 @@ type ScheduleRow = {
 };
 
 function normalizeStatus(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function normalizeSlug(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
@@ -83,7 +91,7 @@ function isEmployeePublicBookable(empleado: EmpleadoPublico) {
 
 export default function PublicBusinessBookingPage() {
   const params = useParams<{ slug: string }>();
-  const slug = String(params.slug ?? "").trim().toLowerCase();
+  const slug = normalizeSlug(String(params.slug ?? ""));
 
   const [business, setBusiness] = useState<BusinessPublic | null>(null);
   const [empleados, setEmpleados] = useState<EmpleadoPublico[]>([]);
@@ -102,21 +110,24 @@ export default function PublicBusinessBookingPage() {
           throw new Error("El salón solicitado no es válido.");
         }
 
-        const { data: businessData, error: businessError } = await supabase
-          .from("businesses")
-          .select("id, name, slug")
-          .eq("slug", slug)
-          .maybeSingle();
+        const businessResponse = await fetch(
+          `/api/public-business?slug=${encodeURIComponent(slug)}`
+        );
 
-        if (businessError) {
-          throw new Error(businessError.message);
+        const businessPayload:
+          | PublicBusinessResponse
+          | {
+              error?: string;
+            } = await businessResponse.json();
+
+        if (!businessResponse.ok || !("business" in businessPayload)) {
+          throw new Error(
+            ("error" in businessPayload && businessPayload.error) ||
+              "No se encontró el salón solicitado."
+          );
         }
 
-        if (!businessData) {
-          throw new Error("No se encontró el salón solicitado.");
-        }
-
-        const typedBusiness = businessData as BusinessPublic;
+        const typedBusiness = businessPayload.business;
         setBusiness(typedBusiness);
 
         const [empleadosRes, schedulesRes] = await Promise.all([
@@ -220,8 +231,11 @@ export default function PublicBusinessBookingPage() {
               <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 shadow-sm">
                 Hay {hiddenEmployeesWithoutSchedule.length} profesional
                 {hiddenEmployeesWithoutSchedule.length === 1 ? "" : "es"} que
-                aún no aparece{hiddenEmployeesWithoutSchedule.length === 1 ? "" : "n"} en
-                la reserva online porque no tiene{hiddenEmployeesWithoutSchedule.length === 1 ? "" : "n"} horario configurado.
+                aún no aparece
+                {hiddenEmployeesWithoutSchedule.length === 1 ? "" : "n"} en la
+                reserva online porque no tiene
+                {hiddenEmployeesWithoutSchedule.length === 1 ? "" : "n"} horario
+                configurado.
               </section>
             ) : null}
 
