@@ -7,6 +7,17 @@ import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 const REVENUE_STATUSES = new Set(["Confirmada", "Completada"]);
 const MADRID_TIME_ZONE = "Europe/Madrid";
 
+type BusinessSummary = {
+  id: number;
+  name: string | null;
+  slug: string | null;
+};
+
+type SubscriptionSummary = {
+  plan: string | null;
+  status: string | null;
+};
+
 function toDateValue(date: Date) {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -114,6 +125,57 @@ function buildRevenueByEmployee(reservas: any[]) {
   });
 }
 
+function formatPlanLabel(plan: string | null | undefined) {
+  const normalized = normalizeText(plan ?? "");
+
+  if (!normalized) return "Sin plan";
+  if (normalized === "basic") return "Basic";
+  if (normalized === "pro") return "Pro";
+  if (normalized === "premium") return "Premium";
+
+  return plan ?? "Sin plan";
+}
+
+function formatSubscriptionStatus(status: string | null | undefined) {
+  const normalized = normalizeText(status ?? "");
+
+  if (!normalized) return "Sin suscripción";
+  if (normalized === "active") return "Activa";
+  if (normalized === "inactive") return "Inactiva";
+  if (normalized === "trialing") return "En prueba";
+  if (normalized === "past_due") return "Pago pendiente";
+  if (normalized === "canceled") return "Cancelada";
+  if (normalized === "paused") return "Pausada";
+
+  return status ?? "Sin suscripción";
+}
+
+function getSubscriptionStatusClasses(status: string | null | undefined) {
+  const normalized = normalizeText(status ?? "");
+
+  if (normalized === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (normalized === "trialing") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  if (normalized === "past_due") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (normalized === "canceled") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+
+  if (normalized === "paused") {
+    return "border-zinc-300 bg-zinc-100 text-zinc-700";
+  }
+
+  return "border-zinc-200 bg-zinc-50 text-zinc-700";
+}
+
 export default async function DashboardPage() {
   const { supabase, user, businessId } = await getServerBusinessContext();
 
@@ -153,6 +215,8 @@ export default async function DashboardPage() {
   }).format(new Date());
 
   const [
+    { data: businessDetalle, error: businessDetalleError },
+    { data: subscriptionDetalle, error: subscriptionDetalleError },
     { count: clientesCount, error: clientesError },
     { data: empleadosDetalle, error: empleadosDetalleError },
     { count: serviciosCount, error: serviciosError },
@@ -166,6 +230,18 @@ export default async function DashboardPage() {
     { data: reservasHoyDetalle, error: reservasHoyDetalleError },
     { data: reservasMesDetalle, error: reservasMesDetalleError },
   ] = await Promise.all([
+    supabase
+      .from("businesses")
+      .select("id, name, slug")
+      .eq("id", businessId)
+      .maybeSingle(),
+
+    supabase
+      .from("subscriptions")
+      .select("plan, status")
+      .eq("business_id", businessId)
+      .maybeSingle(),
+
     supabase
       .from("clientes")
       .select("id", { count: "exact", head: true })
@@ -269,6 +345,8 @@ export default async function DashboardPage() {
   ]);
 
   const errores = [
+    businessDetalleError,
+    subscriptionDetalleError,
     clientesError,
     empleadosDetalleError,
     serviciosError,
@@ -282,6 +360,10 @@ export default async function DashboardPage() {
     reservasHoyDetalleError,
     reservasMesDetalleError,
   ].filter(Boolean);
+
+  const businessInfo = (businessDetalle ?? null) as BusinessSummary | null;
+  const subscriptionInfo =
+    (subscriptionDetalle ?? null) as SubscriptionSummary | null;
 
   const empleadosActivosCount =
     (empleadosDetalle ?? []).filter(
@@ -442,6 +524,50 @@ export default async function DashboardPage() {
             </div>
           </div>
         ) : null}
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm font-medium text-zinc-500">Tu negocio</p>
+            <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
+              {businessInfo?.name ?? "Negocio sin nombre"}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              {businessInfo?.slug
+                ? `Slug público: ${businessInfo.slug}`
+                : "Sin identificador público"}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm font-medium text-zinc-500">Plan actual</p>
+            <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
+              {formatPlanLabel(subscriptionInfo?.plan)}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Base SaaS preparada para futuros planes y mejoras.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm font-medium text-zinc-500">
+              Estado de suscripción
+            </p>
+
+            <div className="mt-3">
+              <span
+                className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getSubscriptionStatusClasses(
+                  subscriptionInfo?.status
+                )}`}
+              >
+                {formatSubscriptionStatus(subscriptionInfo?.status)}
+              </span>
+            </div>
+
+            <p className="mt-3 text-sm text-zinc-500">
+              Estado actual del negocio dentro del sistema SaaS.
+            </p>
+          </div>
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">

@@ -37,6 +37,11 @@ const navItems: NavItem[] = [
     description: "Precios y duración",
   },
   {
+    href: "/cuenta",
+    label: "Cuenta",
+    description: "Negocio y suscripción",
+  },
+  {
     href: "/reservar",
     label: "Reserva pública",
     description: "Flujo online para clientes",
@@ -106,7 +111,7 @@ export default function Sidebar() {
           </div>
         </nav>
 
-        <div className="border-t border-zinc-200 px-4 py-5 space-y-4">
+        <div className="space-y-4 border-t border-zinc-200 px-4 py-5">
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
             <p className="text-sm font-semibold text-zinc-900">
               Acceso rápido
