@@ -24,6 +24,16 @@ type Empleado = {
   public_booking_enabled?: boolean | null;
 };
 
+type ScheduleRow = {
+  id: string;
+  business_id?: number | null;
+  employee_id: number;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  is_working: boolean;
+};
+
 type DayColor = "green" | "orange" | "red";
 
 type DayItem = {
@@ -85,6 +95,40 @@ function normalizeStatus(value: string | null | undefined) {
 
 function normalizeSlug(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function parseTimeToMinutes(time: string | null | undefined) {
+  if (!time) return null;
+
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(time);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function hasValidWorkingSchedule(rows: ScheduleRow[] | null | undefined) {
+  return (rows ?? []).some((row) => {
+    if (!row.is_working) return false;
+
+    const start = parseTimeToMinutes(row.start_time);
+    const end = parseTimeToMinutes(row.end_time);
+
+    return start !== null && end !== null && end > start;
+  });
 }
 
 function isEmployeePublicBookable(employee: Empleado | null) {
@@ -159,13 +203,19 @@ function isPastDate(date: string) {
 function getPreviousMonth(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   const date = new Date(year, monthNumber - 2, 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
 }
 
 function getNextMonth(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   const date = new Date(year, monthNumber, 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
 }
 
 function getMonthDaysCount(month: string) {
@@ -302,7 +352,7 @@ export default function PublicEmployeeBookingPage() {
           throw new Error("No se encontró el salón solicitado.");
         }
 
-        const [employeeRes, servicesRes] = await Promise.all([
+        const [employeeRes, servicesRes, schedulesRes] = await Promise.all([
           supabase
             .from("empleados")
             .select("id, business_id, name, status, public_booking_enabled")
@@ -317,6 +367,14 @@ export default function PublicEmployeeBookingPage() {
             .eq("business_id", businessData.id)
             .eq("public_visible", true)
             .order("name", { ascending: true }),
+
+          supabase
+            .from("employee_schedules")
+            .select(
+              "id, business_id, employee_id, weekday, start_time, end_time, is_working"
+            )
+            .eq("business_id", businessData.id)
+            .eq("employee_id", employeeId),
         ]);
 
         if (employeeRes.error) {
@@ -327,10 +385,22 @@ export default function PublicEmployeeBookingPage() {
           throw new Error(servicesRes.error.message);
         }
 
+        if (schedulesRes.error) {
+          throw new Error(schedulesRes.error.message);
+        }
+
         const loadedEmployee = employeeRes.data as Empleado | null;
 
         if (!loadedEmployee || !isEmployeePublicBookable(loadedEmployee)) {
           throw new Error("Empleado no disponible para reservas públicas.");
+        }
+
+        const loadedSchedules = (schedulesRes.data ?? []) as ScheduleRow[];
+
+        if (!hasValidWorkingSchedule(loadedSchedules)) {
+          throw new Error(
+            "Este profesional aún no está disponible para reserva online porque no tiene horario configurado."
+          );
         }
 
         const loadedServices = (servicesRes.data ?? []) as Servicio[];
@@ -416,7 +486,7 @@ export default function PublicEmployeeBookingPage() {
     };
 
     loadMonth();
-  }, [slug, employeeId, employee, serviceId, month]);
+  }, [slug, employeeId, employee, serviceId, month, selectedDate]);
 
   useEffect(() => {
     const loadDay = async () => {
@@ -802,7 +872,9 @@ export default function PublicEmployeeBookingPage() {
                           : cell.info
                           ? getSoftColorClasses(cell.info.color)
                           : "border-zinc-200 bg-white text-zinc-500"
-                      } ${cell.isSelected && !cell.isPast ? "ring-2 ring-black" : ""}`}
+                      } ${
+                        cell.isSelected && !cell.isPast ? "ring-2 ring-black" : ""
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-semibold">
