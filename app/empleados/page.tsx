@@ -9,12 +9,56 @@ type EmpleadosPageProps = {
   }>;
 };
 
+type ScheduleRow = {
+  id: string;
+  business_id?: number | null;
+  employee_id: number;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  is_working: boolean;
+};
+
 function normalizeText(value: string) {
   return value
     .trim()
     .toLocaleLowerCase("es")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function parseTimeToMinutes(time: string | null | undefined) {
+  if (!time) return null;
+
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(time);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function hasValidWorkingSchedule(rows: ScheduleRow[] | null | undefined) {
+  return (rows ?? []).some((row) => {
+    if (!row.is_working) return false;
+
+    const start = parseTimeToMinutes(row.start_time);
+    const end = parseTimeToMinutes(row.end_time);
+
+    return start !== null && end !== null && end > start;
+  });
 }
 
 export default async function EmpleadosPage({
@@ -33,22 +77,61 @@ export default async function EmpleadosPage({
     redirect("/registro");
   }
 
-  const { data: empleados, error } = await supabase
-    .from("empleados")
-    .select("*")
-    .eq("business_id", businessId)
-    .order("name", { ascending: true });
+  const [
+    { data: empleados, error: empleadosError },
+    { data: schedules, error: schedulesError },
+  ] = await Promise.all([
+    supabase
+      .from("empleados")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("name", { ascending: true }),
+
+    supabase
+      .from("employee_schedules")
+      .select(
+        "id, business_id, employee_id, weekday, start_time, end_time, is_working"
+      )
+      .eq("business_id", businessId),
+  ]);
+
+  const error = empleadosError || schedulesError;
+
+  const schedulesByEmployee = new Map<number, ScheduleRow[]>();
+
+  for (const row of ((schedules ?? []) as ScheduleRow[])) {
+    const list = schedulesByEmployee.get(row.employee_id) ?? [];
+    list.push(row);
+    schedulesByEmployee.set(row.employee_id, list);
+  }
 
   const empleadosActivos =
     empleados?.filter(
       (empleado) => normalizeText(empleado.status ?? "Activo") !== "inactivo"
     ) ?? [];
 
-  const empleadosFiltrados = empleadosActivos.filter((empleado) => {
+  const empleadosConEstadoReserva = empleadosActivos.map((empleado) => {
+    const readyForBooking = hasValidWorkingSchedule(
+      schedulesByEmployee.get(empleado.id) ?? []
+    );
+
+    return {
+      ...empleado,
+      readyForBooking,
+    };
+  });
+
+  const empleadosFiltrados = empleadosConEstadoReserva.filter((empleado) => {
     if (!q) return true;
 
+    const reservaText = empleado.readyForBooking
+      ? "listo para reservar"
+      : "sin horario";
+
     const texto = normalizeText(
-      `${empleado.name ?? ""} ${empleado.role ?? ""} ${empleado.phone ?? ""} ${empleado.status ?? ""}`
+      `${empleado.name ?? ""} ${empleado.role ?? ""} ${empleado.phone ?? ""} ${
+        empleado.status ?? ""
+      } ${reservaText}`
     );
 
     return texto.includes(q);
@@ -84,7 +167,7 @@ export default async function EmpleadosPage({
                 Listado de empleados
               </h3>
               <p className="text-sm text-zinc-500">
-                Busca por nombre, rol, teléfono o estado
+                Busca por nombre, rol, teléfono, estado o disponibilidad.
               </p>
             </div>
 
@@ -118,18 +201,19 @@ export default async function EmpleadosPage({
             </div>
           ) : empleadosFiltrados.length > 0 ? (
             <div className="overflow-hidden rounded-2xl border border-zinc-200">
-              <div className="grid grid-cols-5 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
+              <div className="grid grid-cols-6 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
                 <span>Nombre</span>
                 <span>Rol</span>
                 <span>Teléfono</span>
                 <span>Estado</span>
+                <span>Reservas</span>
                 <span>Acciones</span>
               </div>
 
               {empleadosFiltrados.map((empleado) => (
                 <div
                   key={empleado.id}
-                  className="grid grid-cols-5 items-center border-t border-zinc-200 px-4 py-4 text-sm"
+                  className="grid grid-cols-6 items-center border-t border-zinc-200 px-4 py-4 text-sm"
                 >
                   <span className="font-medium text-zinc-900">
                     {empleado.name ?? "-"}
@@ -137,6 +221,18 @@ export default async function EmpleadosPage({
                   <span>{empleado.role ?? "-"}</span>
                   <span>{empleado.phone ?? "-"}</span>
                   <span>{empleado.status ?? "-"}</span>
+
+                  <span>
+                    {empleado.readyForBooking ? (
+                      <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                        Listo para reservar
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                        Sin horario
+                      </span>
+                    )}
+                  </span>
 
                   <div className="flex gap-2">
                     <Link
@@ -159,6 +255,13 @@ export default async function EmpleadosPage({
               No hay empleados activos registrados.
             </div>
           )}
+
+          {!error && empleadosFiltrados.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+              Un empleado puede crearse sin horario, pero no podrá recibir
+              reservas hasta tener al menos un horario válido configurado.
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

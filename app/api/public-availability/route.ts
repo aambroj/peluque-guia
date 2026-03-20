@@ -110,6 +110,19 @@ function parseTimeToMinutes(time: string | null | undefined) {
   return hours * 60 + minutes;
 }
 
+function employeeHasWorkingSchedule(
+  schedules: ScheduleRow[] | null | undefined
+) {
+  return (schedules ?? []).some((row) => {
+    if (!row.is_working) return false;
+
+    const start = parseTimeToMinutes(row.start_time);
+    const end = parseTimeToMinutes(row.end_time);
+
+    return start !== null && end !== null && end > start;
+  });
+}
+
 function formatMinutesToTime(totalMinutes: number) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -368,6 +381,7 @@ async function getBaseData(slug: string, employeeId: number, serviceId: number) 
   const [
     { data: employee, error: employeeError },
     { data: service, error: serviceError },
+    { data: schedules, error: schedulesError },
   ] = await Promise.all([
     supabaseAdmin
       .from("empleados")
@@ -384,6 +398,14 @@ async function getBaseData(slug: string, employeeId: number, serviceId: number) 
       .eq("business_id", typedBusiness.id)
       .eq("public_visible", true)
       .maybeSingle(),
+
+    supabaseAdmin
+      .from("employee_schedules")
+      .select(
+        "id, business_id, employee_id, weekday, start_time, end_time, is_working"
+      )
+      .eq("business_id", typedBusiness.id)
+      .eq("employee_id", employeeId),
   ]);
 
   if (employeeError) {
@@ -394,11 +416,22 @@ async function getBaseData(slug: string, employeeId: number, serviceId: number) 
     throw new Error(serviceError.message);
   }
 
+  if (schedulesError) {
+    throw new Error(schedulesError.message);
+  }
+
   const typedEmployee = (employee as Empleado | null) ?? null;
   const typedService = (service as Servicio | null) ?? null;
+  const typedSchedules = (schedules ?? []) as ScheduleRow[];
 
   if (!typedEmployee || !isEmployeePublicBookable(typedEmployee)) {
     throw new Error("Empleado no disponible para reservas públicas.");
+  }
+
+  if (!employeeHasWorkingSchedule(typedSchedules)) {
+    throw new Error(
+      "Este empleado aún no está disponible para reservas porque no tiene horario configurado."
+    );
   }
 
   if (!typedService) {

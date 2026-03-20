@@ -26,6 +26,16 @@ type Servicio = {
   name: string;
 };
 
+type ScheduleRow = {
+  id: string;
+  business_id?: number | null;
+  employee_id: number;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  is_working: boolean;
+};
+
 type DayStatus = {
   tone: "gray" | "green" | "orange" | "red";
   title: string;
@@ -53,12 +63,48 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function parseTimeToMinutes(time: string | null | undefined) {
+  if (!time) return null;
+
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(time);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function hasValidWorkingSchedule(rows: ScheduleRow[] | null | undefined) {
+  return (rows ?? []).some((row) => {
+    if (!row.is_working) return false;
+
+    const start = parseTimeToMinutes(row.start_time);
+    const end = parseTimeToMinutes(row.end_time);
+
+    return start !== null && end !== null && end > start;
+  });
+}
+
 export default function NuevaReservaPage() {
   const router = useRouter();
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [hiddenEmployeesWithoutSchedule, setHiddenEmployeesWithoutSchedule] =
+    useState<Empleado[]>([]);
 
   const [clientSearch, setClientSearch] = useState("");
   const [showClientDropdown, setShowClientDropdown] = useState(false);
@@ -122,48 +168,84 @@ export default function NuevaReservaPage() {
         return;
       }
 
-      const [clientesRes, empleadosRes, serviciosRes] = await Promise.all([
-        supabaseBrowser
-          .from("clientes")
-          .select("id, name")
-          .eq("business_id", businessId)
-          .order("name", { ascending: true }),
-        supabaseBrowser
-          .from("empleados")
-          .select("id, name, status")
-          .eq("business_id", businessId)
-          .order("name", { ascending: true }),
-        supabaseBrowser
-          .from("servicios")
-          .select("id, name")
-          .eq("business_id", businessId)
-          .order("name", { ascending: true }),
-      ]);
+      const [clientesRes, empleadosRes, serviciosRes, schedulesRes] =
+        await Promise.all([
+          supabaseBrowser
+            .from("clientes")
+            .select("id, name")
+            .eq("business_id", businessId)
+            .order("name", { ascending: true }),
 
-      if (clientesRes.error || empleadosRes.error || serviciosRes.error) {
+          supabaseBrowser
+            .from("empleados")
+            .select("id, name, status")
+            .eq("business_id", businessId)
+            .order("name", { ascending: true }),
+
+          supabaseBrowser
+            .from("servicios")
+            .select("id, name")
+            .eq("business_id", businessId)
+            .order("name", { ascending: true }),
+
+          supabaseBrowser
+            .from("employee_schedules")
+            .select(
+              "id, business_id, employee_id, weekday, start_time, end_time, is_working"
+            )
+            .eq("business_id", businessId),
+        ]);
+
+      if (
+        clientesRes.error ||
+        empleadosRes.error ||
+        serviciosRes.error ||
+        schedulesRes.error
+      ) {
         throw new Error(
           clientesRes.error?.message ||
             empleadosRes.error?.message ||
             serviciosRes.error?.message ||
+            schedulesRes.error?.message ||
             "Error al cargar datos"
         );
       }
 
-      const empleadosActivos = ((empleadosRes.data ?? []) as Empleado[])
-        .filter(
-          (empleado) =>
-            normalizeText(empleado.status ?? "Activo") !== "inactivo"
+      const schedulesByEmployee = new Map<number, ScheduleRow[]>();
+
+      for (const row of (schedulesRes.data ?? []) as ScheduleRow[]) {
+        const list = schedulesByEmployee.get(row.employee_id) ?? [];
+        list.push(row);
+        schedulesByEmployee.set(row.employee_id, list);
+      }
+
+      const empleadosActivos = ((empleadosRes.data ?? []) as Empleado[]).filter(
+        (empleado) => normalizeText(empleado.status ?? "Activo") !== "inactivo"
+      );
+
+      const empleadosConHorario = empleadosActivos
+        .filter((empleado) =>
+          hasValidWorkingSchedule(schedulesByEmployee.get(empleado.id) ?? [])
         )
         .map(({ id, name }) => ({ id, name }));
 
+      const empleadosSinHorario = empleadosActivos
+        .filter(
+          (empleado) =>
+            !hasValidWorkingSchedule(schedulesByEmployee.get(empleado.id) ?? [])
+        )
+        .map(({ id, name, status }) => ({ id, name, status }));
+
       setClientes((clientesRes.data ?? []) as Cliente[]);
-      setEmpleados(empleadosActivos);
+      setEmpleados(empleadosConHorario);
       setServicios((serviciosRes.data ?? []) as Servicio[]);
+      setHiddenEmployeesWithoutSchedule(empleadosSinHorario);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar datos");
       setClientes([]);
       setEmpleados([]);
       setServicios([]);
+      setHiddenEmployeesWithoutSchedule([]);
     } finally {
       setLoadingData(false);
     }
@@ -172,6 +254,28 @@ export default function NuevaReservaPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!form.employee_id) return;
+
+    const exists = empleados.some(
+      (empleado) => String(empleado.id) === form.employee_id
+    );
+
+    if (!exists) {
+      setForm((prev) => ({
+        ...prev,
+        employee_id: "",
+        time: "",
+      }));
+      setAvailableSlots([]);
+      setDayStatus({
+        tone: "gray",
+        title: "Sin comprobar",
+        detail: "Selecciona empleado, servicio y fecha.",
+      });
+    }
+  }, [empleados, form.employee_id]);
 
   useEffect(() => {
     const loadAvailability = async () => {
@@ -577,6 +681,18 @@ export default function NuevaReservaPage() {
                   </option>
                 ))}
               </select>
+
+              {hiddenEmployeesWithoutSchedule.length > 0 ? (
+                <p className="mt-2 text-sm text-amber-700">
+                  Se ocultan {hiddenEmployeesWithoutSchedule.length} empleado
+                  {hiddenEmployeesWithoutSchedule.length === 1 ? "" : "s"} sin
+                  horario configurado porque todavía no pueden recibir reservas.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-500">
+                  Solo se muestran empleados activos con horario configurado.
+                </p>
+              )}
             </div>
 
             <div>

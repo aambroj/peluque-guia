@@ -64,7 +64,11 @@ export default async function NuevoEmpleadoPage({
       [BOOKING_FIELD_NAME]: formData.get("online_booking") === "on",
     };
 
-    const { error } = await supabaseAdmin.from("empleados").insert(payload);
+    const { data: nuevoEmpleado, error } = await supabaseAdmin
+      .from("empleados")
+      .insert(payload)
+      .select("id")
+      .single();
 
     if (error) {
       redirect(`/empleados/nuevo?error=${encodeURIComponent(error.message)}`);
@@ -75,7 +79,7 @@ export default async function NuevoEmpleadoPage({
     revalidatePath("/reservas");
     revalidatePath("/reservar");
 
-    redirect("/empleados");
+    redirect(`/empleados/editar/${nuevoEmpleado.id}/horario`);
   }
 
   return (
@@ -106,6 +110,12 @@ export default async function NuevoEmpleadoPage({
             {errorMessage}
           </div>
         ) : null}
+
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          El empleado puede crearse sin horario, pero no podrá recibir reservas
+          hasta tener al menos un horario válido configurado. Al guardarlo te
+          llevaremos directamente a su pantalla de horario.
+        </div>
 
         <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
           <form action={createEmpleado} className="space-y-6">
@@ -196,7 +206,7 @@ export default async function NuevoEmpleadoPage({
                 type="submit"
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
               >
-                Guardar empleado
+                Guardar y configurar horario
               </button>
 
               <Link

@@ -20,8 +20,19 @@ type PublicBookingBody = {
   startTime?: string;
 };
 
+type ScheduleRow = {
+  id: string;
+  business_id?: number | null;
+  employee_id: number;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  is_working: boolean;
+};
+
 type TimeOffRow = {
   id: string;
+  business_id?: number | null;
   employee_id: number;
   date: string;
   end_date: string | null;
@@ -141,6 +152,19 @@ function getServiceDurationMinutes(
   }
 
   return null;
+}
+
+function employeeHasWorkingSchedule(
+  schedules: ScheduleRow[] | null | undefined
+) {
+  return (schedules ?? []).some((row) => {
+    if (!row.is_working) return false;
+
+    const start = parseTimeToMinutes(row.start_time);
+    const end = parseTimeToMinutes(row.end_time);
+
+    return start !== null && end !== null && end > start;
+  });
 }
 
 function rangesOverlap(
@@ -301,7 +325,7 @@ export async function POST(request: Request) {
     const [
       { data: empleado, error: empleadoError },
       { data: servicio, error: servicioError },
-      { data: horarioEmpleado, error: horarioError },
+      { data: horariosEmpleado, error: horariosError },
       { data: timeOffRows, error: timeOffError },
       { data: reservasExistentes, error: reservasExistentesError },
     ] = await Promise.all([
@@ -323,16 +347,18 @@ export async function POST(request: Request) {
 
       supabaseAdmin
         .from("employee_schedules")
-        .select("id, employee_id, weekday, start_time, end_time, is_working")
-        .eq("employee_id", employee_id)
-        .eq("weekday", weekday)
-        .maybeSingle(),
+        .select(
+          "id, business_id, employee_id, weekday, start_time, end_time, is_working"
+        )
+        .eq("business_id", businessId)
+        .eq("employee_id", employee_id),
 
       supabaseAdmin
         .from("employee_time_off")
         .select(
-          "id, employee_id, date, end_date, start_time, end_time, reason, is_full_day"
+          "id, business_id, employee_id, date, end_date, start_time, end_time, reason, is_full_day"
         )
+        .eq("business_id", businessId)
         .eq("employee_id", employee_id),
 
       supabaseAdmin
@@ -368,9 +394,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (horarioError) {
+    if (horariosError) {
       return NextResponse.json(
-        { error: `Error al comprobar horario: ${horarioError.message}` },
+        { error: `Error al comprobar horarios: ${horariosError.message}` },
         { status: 500 }
       );
     }
@@ -414,6 +440,18 @@ export async function POST(request: Request) {
         {
           error:
             "El empleado seleccionado no está disponible actualmente para reservas online.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const typedSchedules = (horariosEmpleado ?? []) as ScheduleRow[];
+
+    if (!employeeHasWorkingSchedule(typedSchedules)) {
+      return NextResponse.json(
+        {
+          error:
+            "Este empleado aún no está disponible para reservas porque no tiene horario configurado.",
         },
         { status: 409 }
       );
@@ -465,6 +503,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const horarioEmpleado =
+      typedSchedules.find((row) => row.weekday === weekday) ?? null;
 
     if (!horarioEmpleado || !horarioEmpleado.is_working) {
       return NextResponse.json(
