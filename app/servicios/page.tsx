@@ -361,7 +361,7 @@ export default function ServiciosPage() {
                 onClick={saveAll}
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
               >
-                Guardar todos
+                Guardar cambios
               </button>
             </div>
           </div>
@@ -478,11 +478,19 @@ export default function ServiciosPage() {
         </section>
 
         {servicios.length === 0 ? (
-          <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm text-sm text-zinc-500">
+          <div className="rounded-3xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">
             No hay servicios registrados todavía.
           </div>
         ) : (
-          <div className="space-y-4">
+          <section className="space-y-4">
+            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">Servicios existentes</h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Edita servicios ya creados y guarda los cambios de uno en uno o
+                todos a la vez.
+              </p>
+            </div>
+
             {servicios.map((row) => {
               const isSaving = savingSet.has(row.id);
 
@@ -582,14 +590,14 @@ export default function ServiciosPage() {
                         disabled={isSaving}
                         className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                       >
-                        {isSaving ? "Guardando..." : "Guardar servicio"}
+                        {isSaving ? "Guardando..." : "Guardar este servicio"}
                       </button>
                     </div>
                   </div>
                 </article>
               );
             })}
-          </div>
+          </section>
         )}
       </div>
     </section>
