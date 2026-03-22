@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
+import StripeCheckoutButton from "@/components/StripeCheckoutButton";
 
 function normalizeText(value: string) {
   return value
@@ -89,6 +90,11 @@ export default async function PlanesPage() {
               <li>Servicios y empleados</li>
               <li>Reserva pública</li>
             </ul>
+            <div className="mt-6">
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                Plan base actual del producto.
+              </div>
+            </div>
           </div>
 
           <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
@@ -103,6 +109,14 @@ export default async function PlanesPage() {
               <li>Más automatizaciones</li>
               <li>Base para facturación</li>
             </ul>
+            <div className="mt-6">
+              <StripeCheckoutButton
+                plan="pro"
+                className="w-full rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                Pasar a Pro
+              </StripeCheckoutButton>
+            </div>
           </div>
 
           <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
@@ -119,6 +133,14 @@ export default async function PlanesPage() {
               <li>Mayor personalización</li>
               <li>Preparado para futuras integraciones</li>
             </ul>
+            <div className="mt-6">
+              <StripeCheckoutButton
+                plan="premium"
+                className="w-full rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                Pasar a Premium
+              </StripeCheckoutButton>
+            </div>
           </div>
         </div>
 
@@ -127,8 +149,8 @@ export default async function PlanesPage() {
             Próximamente
           </h3>
           <p className="mt-2 text-sm text-amber-800">
-            En una siguiente fase aquí conectaremos el cambio real de plan y la
-            lógica de cobro.
+            En una siguiente fase aquí conectaremos cambio de plan, downgrade y
+            gestión más fina de límites.
           </p>
         </div>
       </div>

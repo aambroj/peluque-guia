@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
+import StripePortalButton from "@/components/StripePortalButton";
 
 export default async function FacturacionPage() {
   const { user, businessId } = await getServerBusinessContext();
@@ -42,11 +43,27 @@ export default async function FacturacionPage() {
           </div>
         </div>
 
+        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-zinc-900">
+                Portal de facturación
+              </h3>
+              <p className="mt-2 text-sm text-zinc-500">
+                Abre el portal de Stripe para revisar pagos, métodos de cobro y
+                suscripción.
+              </p>
+            </div>
+
+            <StripePortalButton className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50">
+              Abrir facturación
+            </StripePortalButton>
+          </div>
+        </div>
+
         <div className="grid gap-6 md:grid-cols-3">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-zinc-500">
-              Próximamente
-            </p>
+            <p className="text-sm font-medium text-zinc-500">Próximamente</p>
             <p className="mt-2 text-xl font-semibold text-zinc-900">
               Facturas
             </p>
@@ -56,9 +73,7 @@ export default async function FacturacionPage() {
           </div>
 
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-zinc-500">
-              Próximamente
-            </p>
+            <p className="text-sm font-medium text-zinc-500">Próximamente</p>
             <p className="mt-2 text-xl font-semibold text-zinc-900">
               Cobros
             </p>
@@ -68,9 +83,7 @@ export default async function FacturacionPage() {
           </div>
 
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-zinc-500">
-              Próximamente
-            </p>
+            <p className="text-sm font-medium text-zinc-500">Próximamente</p>
             <p className="mt-2 text-xl font-semibold text-zinc-900">
               Método de pago
             </p>
@@ -86,7 +99,7 @@ export default async function FacturacionPage() {
           </h3>
           <p className="mt-2 text-sm text-sky-800">
             Esta pantalla ya deja lista la estructura para conectar facturación
-            real en una siguiente fase.
+            real con Stripe.
           </p>
         </div>
       </div>

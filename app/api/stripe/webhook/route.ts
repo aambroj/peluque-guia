@@ -84,6 +84,20 @@ function mapStripeStatusToLocal(status: string | null | undefined) {
   return normalized;
 }
 
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const parent = invoice.parent;
+
+  if (
+    parent &&
+    parent.type === "subscription_details" &&
+    parent.subscription_details?.subscription
+  ) {
+    return toNullableString(parent.subscription_details.subscription);
+  }
+
+  return null;
+}
+
 async function updateSubscriptionRow(params: {
   businessId?: number | null;
   stripeCustomerId?: string | null;
@@ -196,7 +210,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   await updateSubscriptionRow({
     stripeCustomerId: toNullableString(invoice.customer),
-    stripeSubscriptionId: toNullableString(invoice.subscription),
+    stripeSubscriptionId: getInvoiceSubscriptionId(invoice),
     status: "past_due",
   });
 }
@@ -234,16 +248,22 @@ export async function POST(request: NextRequest) {
 
     switch (event.type) {
       case "checkout.session.completed":
-        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        await handleCheckoutCompleted(
+          event.data.object as Stripe.Checkout.Session
+        );
         break;
 
       case "customer.subscription.created":
       case "customer.subscription.updated":
-        await handleSubscriptionUpsert(event.data.object as Stripe.Subscription);
+        await handleSubscriptionUpsert(
+          event.data.object as Stripe.Subscription
+        );
         break;
 
       case "customer.subscription.deleted":
-        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        await handleSubscriptionDeleted(
+          event.data.object as Stripe.Subscription
+        );
         break;
 
       case "invoice.payment_failed":
