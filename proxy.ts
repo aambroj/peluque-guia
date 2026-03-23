@@ -7,6 +7,7 @@ const PROTECTED_ROUTES = [
   "/empleados",
   "/servicios",
   "/reservas",
+  "/cuenta",
 ];
 
 function isProtectedRoute(pathname: string) {
@@ -58,11 +59,28 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if ((pathname === "/login" || pathname === "/registro") && user) {
+  if (pathname === "/login" && user) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.searchParams.delete("redirectTo");
     return NextResponse.redirect(url);
+  }
+
+  if (pathname === "/registro" && user) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("business_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profileError && profile?.business_id) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.searchParams.delete("redirectTo");
+      return NextResponse.redirect(url);
+    }
+
+    return response;
   }
 
   return response;
