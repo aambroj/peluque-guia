@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
+type PlanKey = "basic" | "pro" | "premium";
+
 function getRequiredEnv(name: string) {
   const value = process.env[name];
 
@@ -56,14 +58,36 @@ function toNullableInt(value: unknown): number | null {
   return null;
 }
 
-function mapPriceIdToPlan(priceId: string | null | undefined) {
+function toIsoDateTime(value: unknown): string | null {
+  const unixSeconds = toNullableInt(value);
+
+  if (!unixSeconds) {
+    return null;
+  }
+
+  return new Date(unixSeconds * 1000).toISOString();
+}
+
+function mapPriceIdToPlan(priceId: string | null | undefined): PlanKey | null {
   if (!priceId) return null;
 
+  const basicPriceId = process.env.STRIPE_PRICE_BASIC_MONTHLY;
   const proPriceId = process.env.STRIPE_PRICE_PRO_MONTHLY;
   const premiumPriceId = process.env.STRIPE_PRICE_PREMIUM_MONTHLY;
 
+  if (priceId === basicPriceId) return "basic";
   if (priceId === proPriceId) return "pro";
   if (priceId === premiumPriceId) return "premium";
+
+  return null;
+}
+
+function getEmployeeLimitForPlan(plan: string | null | undefined): number | null {
+  const normalized = normalizeText(plan ?? "");
+
+  if (normalized === "basic") return 2;
+  if (normalized === "pro") return 5;
+  if (normalized === "premium") return 10;
 
   return null;
 }
@@ -72,19 +96,30 @@ function mapStripeStatusToLocal(status: string | null | undefined) {
   const normalized = normalizeText(status ?? "");
 
   if (!normalized) return null;
-  if (normalized === "active") return "active";
-  if (normalized === "trialing") return "trialing";
-  if (normalized === "past_due") return "past_due";
-  if (normalized === "paused") return "paused";
-  if (normalized === "canceled") return "canceled";
-  if (normalized === "unpaid") return "past_due";
-  if (normalized === "incomplete") return "inactive";
-  if (normalized === "incomplete_expired") return "inactive";
 
-  return normalized;
+  const allowed = [
+    "incomplete",
+    "incomplete_expired",
+    "trialing",
+    "active",
+    "past_due",
+    "canceled",
+    "unpaid",
+    "paused",
+  ];
+
+  return allowed.includes(normalized) ? normalized : normalized;
 }
 
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const legacyInvoice = invoice as Stripe.Invoice & {
+    subscription?: string | Stripe.Subscription | null;
+  };
+
+  if (legacyInvoice.subscription) {
+    return toNullableString(legacyInvoice.subscription);
+  }
+
   const parent = invoice.parent;
 
   if (
@@ -105,10 +140,16 @@ async function updateSubscriptionRow(params: {
   stripePriceId?: string | null;
   status?: string | null;
   plan?: string | null;
+  employeeLimit?: number | null;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
+  trialEnd?: string | null;
+  cancelAt?: string | null;
+  cancelAtPeriodEnd?: boolean | null;
 }) {
   const supabaseAdmin = getSupabaseAdmin();
 
-  const payload: Record<string, string | null> = {};
+  const payload: Record<string, unknown> = {};
 
   if (params.stripeCustomerId !== undefined) {
     payload.stripe_customer_id = params.stripeCustomerId;
@@ -122,12 +163,36 @@ async function updateSubscriptionRow(params: {
     payload.stripe_price_id = params.stripePriceId;
   }
 
-  if (params.status !== undefined && params.status !== null) {
+  if (params.status !== undefined) {
     payload.status = params.status;
   }
 
-  if (params.plan !== undefined && params.plan !== null) {
+  if (params.plan !== undefined) {
     payload.plan = params.plan;
+  }
+
+  if (params.employeeLimit !== undefined) {
+    payload.employee_limit = params.employeeLimit;
+  }
+
+  if (params.currentPeriodStart !== undefined) {
+    payload.current_period_start = params.currentPeriodStart;
+  }
+
+  if (params.currentPeriodEnd !== undefined) {
+    payload.current_period_end = params.currentPeriodEnd;
+  }
+
+  if (params.trialEnd !== undefined) {
+    payload.trial_end = params.trialEnd;
+  }
+
+  if (params.cancelAt !== undefined) {
+    payload.cancel_at = params.cancelAt;
+  }
+
+  if (params.cancelAtPeriodEnd !== undefined) {
+    payload.cancel_at_period_end = params.cancelAtPeriodEnd;
   }
 
   if (Object.keys(payload).length === 0) {
@@ -135,28 +200,40 @@ async function updateSubscriptionRow(params: {
   }
 
   if (params.businessId) {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("subscriptions")
       .update(payload)
       .eq("business_id", params.businessId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
 
     return;
   }
 
   if (params.stripeSubscriptionId) {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("subscriptions")
       .update(payload)
       .eq("stripe_subscription_id", params.stripeSubscriptionId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
 
     return;
   }
 
   if (params.stripeCustomerId) {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("subscriptions")
       .update(payload)
       .eq("stripe_customer_id", params.stripeCustomerId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
   }
 }
 
@@ -175,12 +252,22 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     stripeSubscriptionId: toNullableString(session.subscription),
     stripePriceId: session.metadata?.target_price_id ?? null,
     plan: session.metadata?.target_plan ?? null,
+    employeeLimit: toNullableInt(session.metadata?.employee_limit),
   });
 }
 
 async function handleSubscriptionUpsert(subscription: Stripe.Subscription) {
-  const stripePriceId = subscription.items.data[0]?.price?.id ?? null;
-  const mappedPlan = mapPriceIdToPlan(stripePriceId);
+  const firstItem = subscription.items.data[0];
+  const stripePriceId = firstItem?.price?.id ?? null;
+
+  const planFromPrice = mapPriceIdToPlan(stripePriceId);
+  const planFromMetadata = subscription.metadata?.target_plan ?? null;
+  const plan = planFromPrice ?? planFromMetadata;
+
+  const employeeLimit =
+    toNullableInt(subscription.metadata?.employee_limit) ??
+    getEmployeeLimitForPlan(plan);
+
   const localStatus = mapStripeStatusToLocal(subscription.status);
   const businessId = toNullableInt(subscription.metadata?.business_id);
 
@@ -190,29 +277,57 @@ async function handleSubscriptionUpsert(subscription: Stripe.Subscription) {
     stripeSubscriptionId: subscription.id,
     stripePriceId,
     status: localStatus,
-    plan: mappedPlan,
+    plan,
+    employeeLimit,
+    currentPeriodStart: toIsoDateTime(firstItem?.current_period_start),
+    currentPeriodEnd: toIsoDateTime(firstItem?.current_period_end),
+    trialEnd: toIsoDateTime(subscription.trial_end),
+    cancelAt: toIsoDateTime(subscription.cancel_at),
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
   });
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const firstItem = subscription.items.data[0];
+  const stripePriceId = firstItem?.price?.id ?? null;
+
+  const planFromPrice = mapPriceIdToPlan(stripePriceId);
+  const planFromMetadata = subscription.metadata?.target_plan ?? null;
+  const plan = planFromPrice ?? planFromMetadata;
+
+  const employeeLimit =
+    toNullableInt(subscription.metadata?.employee_limit) ??
+    getEmployeeLimitForPlan(plan);
+
   const businessId = toNullableInt(subscription.metadata?.business_id);
 
   await updateSubscriptionRow({
     businessId,
     stripeCustomerId: toNullableString(subscription.customer),
     stripeSubscriptionId: subscription.id,
-    stripePriceId: subscription.items.data[0]?.price?.id ?? null,
+    stripePriceId,
     status: "canceled",
-    plan: "basic",
+    plan,
+    employeeLimit,
+    currentPeriodStart: toIsoDateTime(firstItem?.current_period_start),
+    currentPeriodEnd: toIsoDateTime(firstItem?.current_period_end),
+    trialEnd: toIsoDateTime(subscription.trial_end),
+    cancelAt: toIsoDateTime(subscription.cancel_at),
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
   });
 }
 
-async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
-  await updateSubscriptionRow({
-    stripeCustomerId: toNullableString(invoice.customer),
-    stripeSubscriptionId: getInvoiceSubscriptionId(invoice),
-    status: "past_due",
-  });
+async function syncInvoiceSubscription(invoice: Stripe.Invoice) {
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
+
+  if (!subscriptionId) {
+    return;
+  }
+
+  const stripe = getStripeClient();
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+  await handleSubscriptionUpsert(subscription);
 }
 
 export async function POST(request: NextRequest) {
@@ -267,7 +382,8 @@ export async function POST(request: NextRequest) {
         break;
 
       case "invoice.payment_failed":
-        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+      case "invoice.payment_succeeded":
+        await syncInvoiceSubscription(event.data.object as Stripe.Invoice);
         break;
 
       default:

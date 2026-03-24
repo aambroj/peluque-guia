@@ -21,40 +21,74 @@ function formatPlanLabel(plan: string | null | undefined) {
   return plan ?? "Sin plan";
 }
 
-function formatSubscriptionStatus(status: string | null | undefined) {
-  const normalized = normalizeText(status ?? "");
+function formatDate(value: string | null | undefined) {
+  if (!value) return null;
 
-  if (!normalized) return "Sin suscripción";
-  if (normalized === "active") return "Activa";
-  if (normalized === "inactive") return "Inactiva";
-  if (normalized === "trialing") return "En prueba";
-  if (normalized === "past_due") return "Pago pendiente";
-  if (normalized === "canceled") return "Cancelada";
-  if (normalized === "paused") return "Pausada";
+  const date = new Date(value);
 
-  return status ?? "Sin suscripción";
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
-function getStatusClasses(status: string | null | undefined) {
-  const normalized = normalizeText(status ?? "");
+function getEffectiveStatusLabel(params: {
+  plan: string | null | undefined;
+  status: string | null | undefined;
+}) {
+  const normalizedPlan = normalizeText(params.plan ?? "");
+  const normalizedStatus = normalizeText(params.status ?? "");
 
-  if (normalized === "active") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (normalizedPlan === "basic" && normalizedStatus === "inactive") {
+    return "Pendiente de activar";
   }
 
-  if (normalized === "trialing") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
+  if (!normalizedStatus) return "Sin suscripción";
+  if (normalizedStatus === "active") return "Activa";
+  if (normalizedStatus === "inactive") return "Inactiva";
+  if (normalizedStatus === "trialing") return "En prueba";
+  if (normalizedStatus === "past_due") return "Pago pendiente";
+  if (normalizedStatus === "canceled") return "Cancelada";
+  if (normalizedStatus === "paused") return "Pausada";
+  if (normalizedStatus === "unpaid") return "Impagada";
+  if (normalizedStatus === "incomplete") return "Pendiente de completar";
 
-  if (normalized === "past_due") {
+  return params.status ?? "Sin suscripción";
+}
+
+function getStatusClasses(params: {
+  plan: string | null | undefined;
+  status: string | null | undefined;
+}) {
+  const normalizedPlan = normalizeText(params.plan ?? "");
+  const normalizedStatus = normalizeText(params.status ?? "");
+
+  if (normalizedPlan === "basic" && normalizedStatus === "inactive") {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
-  if (normalized === "canceled") {
+  if (normalizedStatus === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (normalizedStatus === "trialing") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  if (normalizedStatus === "past_due" || normalizedStatus === "unpaid") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (normalizedStatus === "canceled") {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
 
-  if (normalized === "paused") {
+  if (normalizedStatus === "paused") {
     return "border-zinc-300 bg-zinc-100 text-zinc-700";
   }
 
@@ -73,6 +107,133 @@ function getPlanCardClasses(plan: string | null | undefined) {
   }
 
   return "border-zinc-200 bg-white";
+}
+
+function getDefaultEmployeeLimit(plan: string | null | undefined) {
+  const normalized = normalizeText(plan ?? "");
+
+  if (normalized === "basic") return 2;
+  if (normalized === "pro") return 5;
+  if (normalized === "premium") return 10;
+
+  return 2;
+}
+
+function getSubscriptionNotice(params: {
+  plan: string | null | undefined;
+  status: string | null | undefined;
+  trialEnd: string | null | undefined;
+  currentPeriodEnd: string | null | undefined;
+}) {
+  const normalizedPlan = normalizeText(params.plan ?? "");
+  const normalizedStatus = normalizeText(params.status ?? "");
+  const trialEndLabel = formatDate(params.trialEnd);
+  const currentPeriodEndLabel = formatDate(params.currentPeriodEnd);
+
+  if (normalizedPlan === "basic" && normalizedStatus === "inactive") {
+    return {
+      tone: "amber" as const,
+      title: "Tu prueba gratis aún no está activada",
+      description:
+        "Has creado el negocio, pero todavía no has iniciado la prueba de 30 días. Activa Basic desde Planes para empezar.",
+    };
+  }
+
+  if (normalizedStatus === "trialing") {
+    return {
+      tone: "sky" as const,
+      title: "Tu prueba gratuita está activa",
+      description: trialEndLabel
+        ? `Tu periodo de prueba finaliza el ${trialEndLabel}.`
+        : "Tu suscripción está en periodo de prueba.",
+    };
+  }
+
+  if (normalizedStatus === "active") {
+    return {
+      tone: "emerald" as const,
+      title: "Tu suscripción está activa",
+      description: currentPeriodEndLabel
+        ? `Tu periodo actual está cubierto hasta el ${currentPeriodEndLabel}.`
+        : "Tu negocio tiene una suscripción activa.",
+    };
+  }
+
+  if (normalizedStatus === "past_due" || normalizedStatus === "unpaid") {
+    return {
+      tone: "amber" as const,
+      title: "Hay un problema con el cobro",
+      description:
+        "Revisa tu facturación o el método de pago para evitar interrupciones en la suscripción.",
+    };
+  }
+
+  if (normalizedStatus === "canceled") {
+    return {
+      tone: "rose" as const,
+      title: "La suscripción está cancelada",
+      description:
+        "Puedes volver a activar un plan desde la pantalla de Planes.",
+    };
+  }
+
+  if (normalizedStatus === "paused") {
+    return {
+      tone: "zinc" as const,
+      title: "La suscripción está pausada",
+      description:
+        "Revisa el estado de la cuenta y la configuración de facturación.",
+    };
+  }
+
+  return {
+    tone: "zinc" as const,
+    title: "Estado de suscripción",
+    description:
+      "Consulta aquí el plan actual, su estado y las acciones disponibles.",
+  };
+}
+
+function getNoticeClasses(
+  tone: "amber" | "sky" | "emerald" | "rose" | "zinc"
+) {
+  if (tone === "amber") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+  if (tone === "sky") {
+    return "border-sky-200 bg-sky-50 text-sky-800";
+  }
+
+  if (tone === "emerald") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  if (tone === "rose") {
+    return "border-rose-200 bg-rose-50 text-rose-800";
+  }
+
+  return "border-zinc-200 bg-zinc-50 text-zinc-700";
+}
+
+function getPrimaryAction(params: {
+  plan: string | null | undefined;
+  status: string | null | undefined;
+}) {
+  const normalizedPlan = normalizeText(params.plan ?? "");
+  const normalizedStatus = normalizeText(params.status ?? "");
+
+  if (normalizedPlan === "basic" && normalizedStatus === "inactive") {
+    return {
+      href: "/cuenta/planes",
+      label: "Activar prueba gratis",
+    };
+  }
+
+  return {
+    href: "/cuenta/planes",
+    label: "Ver planes",
+  };
 }
 
 export default async function CuentaPage() {
@@ -99,7 +260,7 @@ export default async function CuentaPage() {
 
     supabase
       .from("subscriptions")
-      .select("plan, status")
+      .select("plan, status, employee_limit, trial_end, current_period_end")
       .eq("business_id", businessId)
       .maybeSingle(),
 
@@ -113,7 +274,29 @@ export default async function CuentaPage() {
   const errores = [businessError, subscriptionError, profileError].filter(Boolean);
 
   const planLabel = formatPlanLabel(subscription?.plan);
-  const statusLabel = formatSubscriptionStatus(subscription?.status);
+  const statusLabel = getEffectiveStatusLabel({
+    plan: subscription?.plan,
+    status: subscription?.status,
+  });
+
+  const employeeLimit =
+    typeof subscription?.employee_limit === "number" &&
+    Number.isFinite(subscription.employee_limit) &&
+    subscription.employee_limit > 0
+      ? subscription.employee_limit
+      : getDefaultEmployeeLimit(subscription?.plan);
+
+  const notice = getSubscriptionNotice({
+    plan: subscription?.plan,
+    status: subscription?.status,
+    trialEnd: subscription?.trial_end,
+    currentPeriodEnd: subscription?.current_period_end,
+  });
+
+  const primaryAction = getPrimaryAction({
+    plan: subscription?.plan,
+    status: subscription?.status,
+  });
 
   return (
     <section className="px-6 py-8">
@@ -131,7 +314,7 @@ export default async function CuentaPage() {
 
               <p className="mt-2 text-zinc-600">
                 Consulta los datos principales del negocio, el plan actual y el
-                estado de la suscripción.
+                estado real de la suscripción.
               </p>
             </div>
 
@@ -154,6 +337,15 @@ export default async function CuentaPage() {
             </div>
           </div>
         ) : null}
+
+        <div
+          className={`rounded-3xl border p-6 shadow-sm ${getNoticeClasses(
+            notice.tone
+          )}`}
+        >
+          <h3 className="text-xl font-semibold">{notice.title}</h3>
+          <p className="mt-2 text-sm">{notice.description}</p>
+        </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -213,12 +405,22 @@ export default async function CuentaPage() {
                 <div className="mt-2">
                   <span
                     className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getStatusClasses(
-                      subscription?.status
+                      {
+                        plan: subscription?.plan,
+                        status: subscription?.status,
+                      }
                     )}`}
                   >
                     {statusLabel}
                   </span>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <p className="text-sm text-zinc-500">Límite de empleados</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">
+                  {employeeLimit} activos
+                </p>
               </div>
 
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -241,16 +443,17 @@ export default async function CuentaPage() {
                 Acciones de suscripción
               </h3>
               <p className="mt-1 text-sm text-zinc-500">
-                Base preparada para conectar planes, cobro y gestión comercial.
+                Gestiona la activación del plan, la facturación y la evolución
+                de tu suscripción.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/cuenta/planes"
+                href={primaryAction.href}
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
               >
-                Mejorar plan
+                {primaryAction.label}
               </Link>
 
               <Link
@@ -269,41 +472,33 @@ export default async function CuentaPage() {
                 {planLabel}
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                Tu negocio está actualmente en este nivel de servicio.
+                Tu negocio está asignado a este nivel de servicio.
               </p>
             </div>
 
             <div className="rounded-2xl border border-zinc-200 p-4">
-              <p className="text-sm font-medium text-zinc-500">Próximamente</p>
+              <p className="text-sm font-medium text-zinc-500">Estado actual</p>
               <p className="mt-2 text-lg font-semibold text-zinc-900">
-                Cambio de plan
+                {statusLabel}
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                Preparado para pasar de Basic a Pro o Premium.
+                {notice.description}
               </p>
             </div>
 
             <div className="rounded-2xl border border-zinc-200 p-4">
-              <p className="text-sm font-medium text-zinc-500">Próximamente</p>
+              <p className="text-sm font-medium text-zinc-500">
+                Capacidad incluida
+              </p>
               <p className="mt-2 text-lg font-semibold text-zinc-900">
-                Historial de facturas
+                {employeeLimit} empleados activos
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                Espacio reservado para pagos, facturas y método de cobro.
+                El límite de empleados se aplica al crear o reactivar miembros
+                del equipo.
               </p>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
-          <h3 className="text-xl font-semibold text-sky-900">
-            Próxima evolución SaaS
-          </h3>
-          <p className="mt-2 text-sm text-sky-800">
-            Esta pantalla ya deja preparada la base para mostrar límites,
-            facturación, cambio de plan y gestión de suscripción en siguientes
-            fases.
-          </p>
         </div>
       </div>
     </section>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 type StripeCheckoutButtonProps = {
-  plan: "pro" | "premium";
+  plan: "basic" | "pro" | "premium";
   children: React.ReactNode;
   className?: string;
 };

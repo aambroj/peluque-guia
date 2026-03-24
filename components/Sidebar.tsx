@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import { supabase } from "@/lib/supabase";
 
 type NavItem = {
   href: string;
@@ -10,7 +12,7 @@ type NavItem = {
   description: string;
 };
 
-const navItems: NavItem[] = [
+const FULL_NAV_ITEMS: NavItem[] = [
   {
     href: "/dashboard",
     label: "Dashboard",
@@ -48,6 +50,37 @@ const navItems: NavItem[] = [
   },
 ];
 
+const ONBOARDING_NAV_ITEMS: NavItem[] = [
+  {
+    href: "/cuenta",
+    label: "Cuenta",
+    description: "Activa tu negocio",
+  },
+  {
+    href: "/cuenta/planes",
+    label: "Planes",
+    description: "Inicia la prueba gratis",
+  },
+];
+
+function normalizeText(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isPendingActivationSubscription(
+  plan: string | null | undefined,
+  status: string | null | undefined
+) {
+  return (
+    normalizeText(plan ?? "") === "basic" &&
+    normalizeText(status ?? "") === "inactive"
+  );
+}
+
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") {
     return pathname === "/dashboard";
@@ -59,11 +92,84 @@ function isActive(pathname: string, href: string) {
 export default function Sidebar() {
   const pathname = usePathname();
 
+  const [isLoadingAccessState, setIsLoadingAccessState] = useState(true);
+  const [isPendingActivation, setIsPendingActivation] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAccessState() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          if (!cancelled) {
+            setIsPendingActivation(false);
+            setIsLoadingAccessState(false);
+          }
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("business_id")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!profile?.business_id) {
+          if (!cancelled) {
+            setIsPendingActivation(false);
+            setIsLoadingAccessState(false);
+          }
+          return;
+        }
+
+        const { data: subscription } = await supabase
+          .from("subscriptions")
+          .select("plan, status")
+          .eq("business_id", profile.business_id)
+          .maybeSingle();
+
+        if (!cancelled) {
+          setIsPendingActivation(
+            isPendingActivationSubscription(
+              subscription?.plan,
+              subscription?.status
+            )
+          );
+          setIsLoadingAccessState(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsPendingActivation(false);
+          setIsLoadingAccessState(false);
+        }
+      }
+    }
+
+    loadAccessState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const restrictedMode = isLoadingAccessState || isPendingActivation;
+
+  const navItems = useMemo(
+    () => (restrictedMode ? ONBOARDING_NAV_ITEMS : FULL_NAV_ITEMS),
+    [restrictedMode]
+  );
+
+  const homeHref = restrictedMode ? "/cuenta" : "/dashboard";
+
   return (
     <aside className="border-r border-zinc-200 bg-white">
       <div className="sticky top-0 flex h-full min-h-screen flex-col">
         <div className="border-b border-zinc-200 px-6 py-6">
-          <Link href="/dashboard" className="block">
+          <Link href={homeHref} className="block">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
               Peluque-Guía
             </p>
@@ -71,7 +177,9 @@ export default function Sidebar() {
               Panel de gestión
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
-              Todo el negocio en un solo lugar
+              {restrictedMode
+                ? "Activa tu prueba para empezar"
+                : "Todo el negocio en un solo lugar"}
             </p>
           </Link>
         </div>
@@ -112,31 +220,49 @@ export default function Sidebar() {
         </nav>
 
         <div className="space-y-4 border-t border-zinc-200 px-4 py-5">
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-            <p className="text-sm font-semibold text-zinc-900">
-              Acceso rápido
-            </p>
-            <div className="mt-3 grid gap-2">
+          {restrictedMode ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">
+                Negocio pendiente de activación
+              </p>
+              <p className="mt-2 text-xs text-amber-800">
+                Completa la activación del plan Basic para desbloquear clientes,
+                empleados, reservas y el resto del panel.
+              </p>
               <Link
-                href="/reservas/nuevo"
-                className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black"
+                href="/cuenta/planes"
+                className="mt-3 inline-flex rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-100"
               >
-                Nueva reserva
-              </Link>
-              <Link
-                href="/clientes/nuevo"
-                className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black"
-              >
-                Nuevo cliente
-              </Link>
-              <Link
-                href="/empleados/nuevo"
-                className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black"
-              >
-                Nuevo empleado
+                Ir a planes
               </Link>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-sm font-semibold text-zinc-900">
+                Acceso rápido
+              </p>
+              <div className="mt-3 grid gap-2">
+                <Link
+                  href="/reservas/nuevo"
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black"
+                >
+                  Nueva reserva
+                </Link>
+                <Link
+                  href="/clientes/nuevo"
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black"
+                >
+                  Nuevo cliente
+                </Link>
+                <Link
+                  href="/empleados/nuevo"
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:border-black"
+                >
+                  Nuevo empleado
+                </Link>
+              </div>
+            </div>
+          )}
 
           <LogoutButton />
         </div>

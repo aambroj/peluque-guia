@@ -9,6 +9,30 @@ type CreateCheckoutSessionBody = {
   plan?: string;
 };
 
+type PlanKey = "basic" | "pro" | "premium";
+
+type PlanConfig = {
+  priceEnvName: string;
+  employeeLimit: number;
+  trialDays?: number;
+};
+
+const PLAN_CONFIG: Record<PlanKey, PlanConfig> = {
+  basic: {
+    priceEnvName: "STRIPE_PRICE_BASIC_MONTHLY",
+    employeeLimit: 2,
+    trialDays: 30,
+  },
+  pro: {
+    priceEnvName: "STRIPE_PRICE_PRO_MONTHLY",
+    employeeLimit: 5,
+  },
+  premium: {
+    priceEnvName: "STRIPE_PRICE_PREMIUM_MONTHLY",
+    employeeLimit: 10,
+  },
+};
+
 function normalizeText(value: string) {
   return value
     .trim()
@@ -35,26 +59,36 @@ function getAppUrl() {
   return getRequiredEnv("NEXT_PUBLIC_APP_URL").replace(/\/+$/, "");
 }
 
-function getTargetPlan(plan: string | null | undefined) {
+function getTargetPlan(plan: string | null | undefined): PlanKey | null {
   const normalized = normalizeText(plan ?? "");
 
+  if (normalized === "basic" || normalized === "basico") return "basic";
   if (normalized === "pro") return "pro";
   if (normalized === "premium") return "premium";
 
   return null;
 }
 
-function getPriceIdForPlan(plan: "pro" | "premium") {
-  if (plan === "pro") {
-    return getRequiredEnv("STRIPE_PRICE_PRO_MONTHLY");
-  }
+function getPlanDetails(plan: PlanKey) {
+  const config = PLAN_CONFIG[plan];
 
-  return getRequiredEnv("STRIPE_PRICE_PREMIUM_MONTHLY");
+  return {
+    ...config,
+    priceId: getRequiredEnv(config.priceEnvName),
+  };
 }
 
 function isManagedSubscriptionStatus(status: string | null | undefined) {
   const normalized = normalizeText(status ?? "");
-  return ["active", "trialing", "past_due", "paused"].includes(normalized);
+
+  return [
+    "active",
+    "trialing",
+    "past_due",
+    "paused",
+    "unpaid",
+    "incomplete",
+  ].includes(normalized);
 }
 
 export async function POST(request: Request) {
@@ -148,7 +182,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const priceId = getPriceIdForPlan(targetPlan);
+    const { priceId, employeeLimit, trialDays } = getPlanDetails(targetPlan);
 
     let stripeCustomerId = subscription.stripe_customer_id ?? null;
 
@@ -200,6 +234,8 @@ export async function POST(request: Request) {
         user_id: user.id,
         target_plan: targetPlan,
         target_price_id: priceId,
+        employee_limit: String(employeeLimit),
+        trial_days: String(trialDays ?? 0),
       },
       subscription_data: {
         metadata: {
@@ -207,7 +243,10 @@ export async function POST(request: Request) {
           user_id: user.id,
           target_plan: targetPlan,
           target_price_id: priceId,
+          employee_limit: String(employeeLimit),
+          trial_days: String(trialDays ?? 0),
         },
+        ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
     });
 

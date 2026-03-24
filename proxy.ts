@@ -10,10 +10,76 @@ const PROTECTED_ROUTES = [
   "/cuenta",
 ];
 
+const ALLOWED_INACTIVE_BUSINESS_ROUTES = [
+  "/cuenta",
+  "/cuenta/planes",
+  "/cuenta/facturacion",
+];
+
+function normalizeText(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function isProtectedRoute(pathname: string) {
   return PROTECTED_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
+}
+
+function isAllowedInactiveBusinessRoute(pathname: string) {
+  if (pathname.startsWith("/api/stripe/")) {
+    return true;
+  }
+
+  return ALLOWED_INACTIVE_BUSINESS_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+}
+
+function isPendingActivationSubscription(
+  plan: string | null | undefined,
+  status: string | null | undefined
+) {
+  return (
+    normalizeText(plan ?? "") === "basic" &&
+    normalizeText(status ?? "") === "inactive"
+  );
+}
+
+async function getBusinessAccessState(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string
+) {
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("business_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profileError || !profile?.business_id) {
+    return {
+      hasBusiness: false,
+      isPendingActivation: false,
+    };
+  }
+
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("plan, status")
+    .eq("business_id", profile.business_id)
+    .maybeSingle();
+
+  return {
+    hasBusiness: true,
+    isPendingActivation: isPendingActivationSubscription(
+      subscription?.plan,
+      subscription?.status
+    ),
+  };
 }
 
 export async function proxy(request: NextRequest) {
@@ -59,28 +125,43 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/login" && user) {
+  if (!user) {
+    return response;
+  }
+
+  const accessState = await getBusinessAccessState(supabase, user.id);
+
+  if (pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+
+    url.pathname = accessState.isPendingActivation ? "/cuenta" : "/dashboard";
     url.searchParams.delete("redirectTo");
+
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/registro" && user) {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("business_id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!profileError && profile?.business_id) {
+  if (pathname === "/registro") {
+    if (accessState.hasBusiness) {
       const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
+
+      url.pathname = accessState.isPendingActivation ? "/cuenta" : "/dashboard";
       url.searchParams.delete("redirectTo");
+
       return NextResponse.redirect(url);
     }
 
     return response;
+  }
+
+  if (
+    accessState.isPendingActivation &&
+    isProtectedRoute(pathname) &&
+    !isAllowedInactiveBusinessRoute(pathname)
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/cuenta";
+    url.searchParams.delete("redirectTo");
+    return NextResponse.redirect(url);
   }
 
   return response;
