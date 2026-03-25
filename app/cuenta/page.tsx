@@ -460,43 +460,45 @@ export default async function CuentaPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link
-                href={primaryAction.href}
-                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-              >
-               {primaryAction.label}
-              </Link>
+  <Link
+    href={primaryAction.href}
+    className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+  >
+    {primaryAction.label}
+  </Link>
 
-              {showCustomerPortalActions ? (
-                <>
-                  <Link
-                    href="/cuenta/facturacion"
-                    className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                  >
-                    Gestionar suscripción
-                  </Link>
+  {showCustomerPortalActions ? (
+    <>
+      <Link
+        href="/cuenta/facturacion"
+        className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+      >
+        Gestionar suscripción
+      </Link>
 
-                  <StripePortalButton className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50">
-                    Cancelar suscripción
-                  </StripePortalButton>
-                </>
-              ) : (
-                <Link
-                  href="/cuenta/facturacion"
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Facturación
-                </Link>
-              )}
-            </div>
+      <StripePortalButton className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50">
+        Cancelar suscripción
+      </StripePortalButton>
+    </>
+  ) : (
+    <Link
+      href="/cuenta/facturacion"
+      className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+    >
+      Facturación
+    </Link>
+  )}
+</div>
+</div>
 
-          {showCustomerPortalActions ? (
-            <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-              El cambio de tarjeta, facturas, cambios de plan y cancelación se
-              gestionan de forma segura desde Stripe.
-            </div>
-          ) : null}
+{showCustomerPortalActions ? (
+  <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+    El cambio de tarjeta, facturas, cambios de plan y cancelación se
+    gestionan de forma segura desde Stripe.
+  </div>
+) : null}
 
+<div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-zinc-200 p-4">
               <p className="text-sm font-medium text-zinc-500">Plan actual</p>
