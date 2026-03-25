@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
 import LogoutButton from "@/components/LogoutButton";
+import AdvancedDashboardCharts from "@/components/AdvancedDashboardCharts";
 import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 
 const REVENUE_STATUSES = new Set(["Confirmada", "Completada"]);
@@ -16,6 +17,11 @@ type BusinessSummary = {
 type SubscriptionSummary = {
   plan: string | null;
   status: string | null;
+};
+
+type ChartItem = {
+  label: string;
+  value: number;
 };
 
 function toDateValue(date: Date) {
@@ -34,7 +40,9 @@ function getMadridDateAtNoonUTC(baseDate = new Date()) {
   }).formatToParts(baseDate);
 
   const year = Number(parts.find((part) => part.type === "year")?.value ?? "0");
-  const month = Number(parts.find((part) => part.type === "month")?.value ?? "0");
+  const month = Number(
+    parts.find((part) => part.type === "month")?.value ?? "0"
+  );
   const day = Number(parts.find((part) => part.type === "day")?.value ?? "0");
 
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
@@ -81,6 +89,7 @@ function getReservationPrice(reserva: any) {
 
 function getTopItem(items: Record<string, number>) {
   const entries = Object.entries(items).sort((a, b) => b[1] - a[1]);
+
   if (entries.length === 0) return null;
 
   return {
@@ -185,10 +194,69 @@ function hasAdvancedDashboardAccess(
   const normalizedPlan = normalizeText(plan ?? "");
   const normalizedStatus = normalizeText(status ?? "");
 
-  const validStatus = ["trialing", "active", "past_due", "unpaid", "paused"];
-  const validPlan = ["pro", "premium"];
+  const validPlans = ["pro", "premium"];
+  const validStatuses = ["trialing", "active", "past_due", "unpaid", "paused"];
 
-  return validPlan.includes(normalizedPlan) && validStatus.includes(normalizedStatus);
+  return (
+    validPlans.includes(normalizedPlan) &&
+    validStatuses.includes(normalizedStatus)
+  );
+}
+
+function formatShortDayLabel(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  const value = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
+  return new Intl.DateTimeFormat("es-ES", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "UTC",
+  }).format(value);
+}
+
+function buildUpcomingReservationsChart(
+  todayDate: Date,
+  reservas: any[]
+): ChartItem[] {
+  const items: ChartItem[] = [];
+
+  for (let i = 0; i < 7; i += 1) {
+    const date = toDateValue(addDays(todayDate, i));
+
+    const value = reservas.filter(
+      (reserva) => reserva.date === date && reserva.status !== "Cancelada"
+    ).length;
+
+    items.push({
+      label: formatShortDayLabel(date),
+      value,
+    });
+  }
+
+  return items;
+}
+
+function buildRecentRevenueChart(todayDate: Date, reservas: any[]): ChartItem[] {
+  const items: ChartItem[] = [];
+
+  for (let i = 6; i >= 0; i -= 1) {
+    const date = toDateValue(addDays(todayDate, -i));
+
+    const value = reservas
+      .filter(
+        (reserva) =>
+          reserva.date === date && REVENUE_STATUSES.has(reserva.status)
+      )
+      .reduce((acc, reserva) => acc + getReservationPrice(reserva), 0);
+
+    items.push({
+      label: formatShortDayLabel(date),
+      value,
+    });
+  }
+
+  return items;
 }
 
 export default async function DashboardPage() {
@@ -222,6 +290,7 @@ export default async function DashboardPage() {
   );
 
   const monthEnd = toDateValue(monthEndDate);
+  const last7Start = toDateValue(addDays(madridToday, -6));
 
   const mesActualLabel = new Intl.DateTimeFormat("es-ES", {
     timeZone: MADRID_TIME_ZONE,
@@ -244,6 +313,7 @@ export default async function DashboardPage() {
     { data: clientes, error: clientesListaError },
     { data: reservasHoyDetalle, error: reservasHoyDetalleError },
     { data: reservasMesDetalle, error: reservasMesDetalleError },
+    { data: reservasUltimos7Detalle, error: reservasUltimos7DetalleError },
   ] = await Promise.all([
     supabase
       .from("businesses")
@@ -357,6 +427,20 @@ export default async function DashboardPage() {
       .eq("business_id", businessId)
       .gte("date", monthStart)
       .lte("date", monthEnd),
+
+    supabase
+      .from("reservas")
+      .select(`
+        id,
+        status,
+        date,
+        price_at_booking,
+        empleado:empleados!reservas_employee_id_fkey(id, name),
+        servicio:servicios!reservas_service_id_fkey(id, name, price)
+      `)
+      .eq("business_id", businessId)
+      .gte("date", last7Start)
+      .lte("date", today),
   ]);
 
   const errores = [
@@ -374,6 +458,7 @@ export default async function DashboardPage() {
     clientesListaError,
     reservasHoyDetalleError,
     reservasMesDetalleError,
+    reservasUltimos7DetalleError,
   ].filter(Boolean);
 
   const businessInfo = (businessDetalle ?? null) as BusinessSummary | null;
@@ -400,6 +485,7 @@ export default async function DashboardPage() {
 
   const reservasHoy = reservasHoyDetalle ?? [];
   const reservasMes = reservasMesDetalle ?? [];
+  const reservasUltimos7 = reservasUltimos7Detalle ?? [];
 
   const confirmadasHoy =
     reservasHoy.filter((reserva) => reserva.status === "Confirmada").length ?? 0;
@@ -487,6 +573,16 @@ export default async function DashboardPage() {
   const topRecaudacionHoy = recaudacionHoyPorEmpleado[0] ?? null;
   const topRecaudacionMes = recaudacionMesPorEmpleado[0] ?? null;
 
+  const reservasPorDia7 = buildUpcomingReservationsChart(
+    madridToday,
+    reservasProximas ?? []
+  );
+
+  const ingresosPorDia7 = buildRecentRevenueChart(
+    madridToday,
+    reservasUltimos7
+  );
+
   return (
     <section className="px-6 py-8">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -507,38 +603,68 @@ export default async function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-           <Link
-            href="/reservas/nuevo"
-            className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-           >
-            Nueva reserva
-           </Link>
+            <Link
+              href="/reservas/nuevo"
+              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+            >
+              Nueva reserva
+            </Link>
 
-          <Link
-           href="/clientes/nuevo"
-            className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-          >
-            Nuevo cliente
-          </Link>
+            <Link
+              href="/clientes/nuevo"
+              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+            >
+              Nuevo cliente
+            </Link>
 
-          <Link
-           href="/empleados/nuevo"
-           className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-          >
-            Nuevo empleado
-          </Link>
+            <Link
+              href="/empleados/nuevo"
+              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+            >
+              Nuevo empleado
+            </Link>
 
-         {advancedDashboardEnabled ? (
-          <Link
-           href="/api/export/reservas"
-           className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-          >
-            Exportar reservas CSV
-          </Link>
-        ) : null}
+            {advancedDashboardEnabled ? (
+              <>
+                <Link
+                  href="/exportar/reservas"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar reservas CSV
+                </Link>
 
-         <LogoutButton />
-         </div>
+                <Link
+                  href="/exportar/ingresos"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar ingresos CSV
+                </Link>
+
+                <Link
+                  href="/api/export/clientes"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar clientes CSV
+                </Link>
+
+                <Link
+                  href="/api/export/servicios"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar servicios CSV
+                </Link>
+
+                <Link
+                  href="/api/export/empleados"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar empleados CSV
+                </Link>
+              </>
+            ) : null}
+
+            <LogoutButton />
+          </div>
         </div>
 
         {errores.length > 0 ? (
@@ -738,9 +864,16 @@ export default async function DashboardPage() {
               </div>
             </div>
 
+            <AdvancedDashboardCharts
+              reservasPorDia7={reservasPorDia7}
+              ingresosPorDia7={ingresosPorDia7}
+            />
+
             <div className="grid gap-4 xl:grid-cols-4">
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-medium text-zinc-500">Estado de hoy</p>
+                <p className="text-sm font-medium text-zinc-500">
+                  Estado de hoy
+                </p>
                 <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
                   {confirmadasHoy} confirmadas · {pendientesHoy} pendientes
                 </p>
@@ -891,7 +1024,7 @@ export default async function DashboardPage() {
                 Reserva pública
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                Abrir el flujo online para clientes
+                Abrir el flujo de reserva online
               </p>
             </Link>
           </div>

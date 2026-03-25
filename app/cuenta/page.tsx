@@ -1,7 +1,9 @@
 import StripePortalButton from "@/components/StripePortalButton";
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 function normalizeText(value: string) {
   return value
@@ -245,6 +247,39 @@ function canManageSubscription(status: string | null | undefined) {
   );
 }
 
+function hasPremiumCustomizationAccess(
+  plan: string | null | undefined,
+  status: string | null | undefined
+) {
+  const normalizedPlan = normalizeText(plan ?? "");
+  const normalizedStatus = normalizeText(status ?? "");
+
+  return (
+    normalizedPlan === "premium" &&
+    ["trialing", "active", "past_due", "unpaid", "paused"].includes(
+      normalizedStatus
+    )
+  );
+}
+
+function sanitizeHexColor(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  const valid = /^#[0-9a-fA-F]{6}$/.test(raw);
+  return valid ? raw : "#111827";
+}
+
+function sanitizeLogoUrl(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return "";
+
+  if (/^https?:\/\/.+/i.test(raw)) {
+    return raw.slice(0, 1000);
+  }
+
+  return "";
+}
+
 export default async function CuentaPage() {
   const { supabase, user, businessId } = await getServerBusinessContext();
 
@@ -256,6 +291,60 @@ export default async function CuentaPage() {
     redirect("/registro");
   }
 
+  async function savePremiumCustomization(formData: FormData) {
+    "use server";
+
+    const { user, businessId, supabase } = await getServerBusinessContext();
+
+    if (!user) {
+      redirect("/login?redirectTo=/cuenta");
+    }
+
+    if (!businessId) {
+      redirect("/registro");
+    }
+
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("plan, status")
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    if (
+      !hasPremiumCustomizationAccess(subscription?.plan, subscription?.status)
+    ) {
+      redirect("/cuenta");
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    const brandPrimaryColor = sanitizeHexColor(
+      String(formData.get("brand_primary_color") ?? "")
+    );
+
+    const publicBookingMessage = String(
+      formData.get("public_booking_message") ?? ""
+    )
+      .trim()
+      .slice(0, 500);
+
+    const publicLogoUrl = sanitizeLogoUrl(
+      String(formData.get("public_logo_url") ?? "")
+    );
+
+    await supabaseAdmin
+      .from("businesses")
+      .update({
+        brand_primary_color: brandPrimaryColor,
+        public_booking_message: publicBookingMessage || null,
+        public_logo_url: publicLogoUrl || null,
+      })
+      .eq("id", businessId);
+
+    revalidatePath("/cuenta");
+    revalidatePath("/reservar");
+  }
+
   const [
     { data: business, error: businessError },
     { data: subscription, error: subscriptionError },
@@ -263,7 +352,9 @@ export default async function CuentaPage() {
   ] = await Promise.all([
     supabase
       .from("businesses")
-      .select("id, name, slug, email")
+      .select(
+        "id, name, slug, email, brand_primary_color, public_booking_message, public_logo_url"
+      )
       .eq("id", businessId)
       .maybeSingle(),
 
@@ -308,6 +399,14 @@ export default async function CuentaPage() {
   });
 
   const showCustomerPortalActions = canManageSubscription(subscription?.status);
+  const premiumCustomizationEnabled = hasPremiumCustomizationAccess(
+    subscription?.plan,
+    subscription?.status
+  );
+
+  const brandPrimaryColor = sanitizeHexColor(business?.brand_primary_color);
+  const publicBookingMessage = business?.public_booking_message ?? "";
+  const publicLogoUrl = sanitizeLogoUrl(business?.public_logo_url);
 
   return (
     <section className="px-6 py-8">
@@ -533,6 +632,154 @@ export default async function CuentaPage() {
             </div>
           </div>
         </div>
+
+        {premiumCustomizationEnabled ? (
+          <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-xl font-semibold text-violet-900">
+                Personalización Premium
+              </h3>
+              <p className="mt-1 text-sm text-violet-800">
+                Ajusta la apariencia básica de la reserva pública de tu negocio.
+              </p>
+            </div>
+
+            <form action={savePremiumCustomization} className="space-y-6">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="brand_primary_color"
+                    className="mb-2 block text-sm font-medium text-violet-900"
+                  >
+                    Color principal
+                  </label>
+                  <input
+                    id="brand_primary_color"
+                    name="brand_primary_color"
+                    type="color"
+                    defaultValue={brandPrimaryColor}
+                    className="h-14 w-full rounded-xl border border-violet-200 bg-white p-2"
+                  />
+                  <p className="mt-2 text-xs text-violet-800">
+                    Se usará como color de acento en la reserva pública.
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="public_logo_url"
+                    className="mb-2 block text-sm font-medium text-violet-900"
+                  >
+                    Logo público (URL)
+                  </label>
+                  <input
+                    id="public_logo_url"
+                    name="public_logo_url"
+                    type="url"
+                    defaultValue={publicLogoUrl}
+                    className="w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500"
+                    placeholder="https://tu-dominio.com/logo.png"
+                  />
+                  <p className="mt-2 text-xs text-violet-800">
+                    Usa una URL completa pública de imagen (https://...).
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="public_booking_message"
+                  className="mb-2 block text-sm font-medium text-violet-900"
+                >
+                  Mensaje público de reserva
+                </label>
+                <textarea
+                  id="public_booking_message"
+                  name="public_booking_message"
+                  defaultValue={publicBookingMessage}
+                  rows={5}
+                  maxLength={500}
+                  className="w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500"
+                  placeholder="Ej. Reserva tu cita online y te confirmaremos cualquier detalle si fuera necesario."
+                />
+                <p className="mt-2 text-xs text-violet-800">
+                  Este texto podrá mostrarse en la página pública de reserva.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-violet-200 bg-white p-4">
+                <p className="text-sm font-medium text-zinc-900">Vista rápida</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span
+                    className="inline-flex rounded-full px-3 py-1 text-sm font-medium text-white"
+                    style={{ backgroundColor: brandPrimaryColor }}
+                  >
+                    Color activo
+                  </span>
+                  <span className="text-sm text-zinc-600">
+                    {brandPrimaryColor}
+                  </span>
+                </div>
+
+                {publicLogoUrl ? (
+                  <div className="mt-4">
+                    <p className="mb-2 text-sm text-zinc-600">Logo actual</p>
+                    <img
+                      src={publicLogoUrl}
+                      alt="Logo público"
+                      className="h-16 w-auto rounded-xl border border-zinc-200 bg-white p-2"
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-zinc-600">
+                    Todavía no has definido un logo público.
+                  </p>
+                )}
+
+                <p className="mt-4 text-sm text-zinc-700">
+                  {publicBookingMessage ||
+                    "Todavía no has definido un mensaje público."}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  Guardar personalización Premium
+                </button>
+
+                <Link
+                  href="/reservar"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Ver reserva pública
+                </Link>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-violet-900">
+              Personalización Premium
+            </h3>
+            <p className="mt-2 text-sm text-violet-800">
+              En Premium podrás personalizar la reserva pública con color de
+              marca, mensaje del negocio y logo público para dar una experiencia
+              más cuidada.
+            </p>
+            <div className="mt-4">
+              <Link
+                href="/cuenta/planes"
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Ver plan Premium
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -9,6 +9,10 @@ type BusinessPublic = {
   id: number;
   name: string | null;
   slug: string;
+  email?: string | null;
+  brand_primary_color?: string | null;
+  public_booking_message?: string | null;
+  public_logo_url?: string | null;
 };
 
 type PublicBusinessResponse = {
@@ -41,6 +45,25 @@ function normalizeStatus(value: string | null | undefined) {
 
 function normalizeSlug(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function sanitizeHexColor(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : "#111827";
+}
+
+function sanitizeLogoUrl(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  return /^https?:\/\/.+/i.test(raw) ? raw : "";
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const safeHex = sanitizeHexColor(hex).replace("#", "");
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function parseTimeToMinutes(time: string | null | undefined) {
@@ -99,6 +122,21 @@ export default function PublicBusinessBookingPage() {
     useState<EmpleadoPublico[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const accentColor = useMemo(
+    () => sanitizeHexColor(business?.brand_primary_color),
+    [business?.brand_primary_color]
+  );
+
+  const publicBookingMessage = useMemo(
+    () => String(business?.public_booking_message ?? "").trim(),
+    [business?.public_booking_message]
+  );
+
+  const publicLogoUrl = useMemo(
+    () => sanitizeLogoUrl(business?.public_logo_url),
+    [business?.public_logo_url]
+  );
 
   useEffect(() => {
     const loadBusinessAndEmployees = async () => {
@@ -208,13 +246,52 @@ export default function PublicBusinessBookingPage() {
         </div>
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <h1 className="text-3xl font-bold tracking-tight">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                className="inline-flex rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  color: accentColor,
+                  borderColor: hexToRgba(accentColor, 0.22),
+                  backgroundColor: hexToRgba(accentColor, 0.08),
+                }}
+              >
+                Reserva online
+              </span>
+            </div>
+
+            {publicLogoUrl ? (
+              <div className="flex items-center">
+                <img
+                  src={publicLogoUrl}
+                  alt={business?.name ? `Logo de ${business.name}` : "Logo del salón"}
+                  className="h-16 w-auto rounded-xl border border-zinc-200 bg-white p-2 object-contain"
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
             {business?.name || "Reserva tu cita online"}
           </h1>
+
           <p className="mt-2 text-zinc-600">
             Elige el profesional con el que quieres reservar y consulta sus días
             y horas disponibles.
           </p>
+
+          {publicBookingMessage ? (
+            <div
+              className="mt-5 rounded-2xl border p-4 text-sm"
+              style={{
+                borderColor: hexToRgba(accentColor, 0.22),
+                backgroundColor: hexToRgba(accentColor, 0.06),
+                color: "#27272a",
+              }}
+            >
+              {publicBookingMessage}
+            </div>
+          ) : null}
         </section>
 
         {loading ? (
@@ -253,7 +330,7 @@ export default function PublicBusinessBookingPage() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-xl font-semibold">
+                        <h2 className="text-xl font-semibold text-zinc-900">
                           {empleado.name || "Profesional"}
                         </h2>
                         <p className="mt-1 text-sm text-zinc-500">
@@ -261,7 +338,14 @@ export default function PublicBusinessBookingPage() {
                         </p>
                       </div>
 
-                      <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                      <span
+                        className="rounded-full border px-3 py-1 text-xs font-medium"
+                        style={{
+                          color: accentColor,
+                          borderColor: hexToRgba(accentColor, 0.22),
+                          backgroundColor: hexToRgba(accentColor, 0.08),
+                        }}
+                      >
                         Reserva online
                       </span>
                     </div>
@@ -287,7 +371,8 @@ export default function PublicBusinessBookingPage() {
                     <div className="mt-6">
                       <Link
                         href={`/reservar/${slug}/${empleado.id}`}
-                        className="inline-flex rounded-xl bg-black px-4 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                        className="inline-flex rounded-xl px-4 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                        style={{ backgroundColor: accentColor }}
                       >
                         Ver calendario y reservar
                       </Link>

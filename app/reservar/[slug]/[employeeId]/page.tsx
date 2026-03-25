@@ -14,6 +14,10 @@ type BusinessPublic = {
   id: number;
   name: string | null;
   slug: string;
+  email?: string | null;
+  brand_primary_color?: string | null;
+  public_booking_message?: string | null;
+  public_logo_url?: string | null;
 };
 
 type PublicBusinessResponse = {
@@ -99,6 +103,25 @@ function normalizeStatus(value: string | null | undefined) {
 
 function normalizeSlug(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function sanitizeHexColor(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : "#111827";
+}
+
+function sanitizeLogoUrl(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  return /^https?:\/\/.+/i.test(raw) ? raw : "";
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const safeHex = sanitizeHexColor(hex).replace("#", "");
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function parseTimeToMinutes(time: string | null | undefined) {
@@ -327,6 +350,21 @@ export default function PublicEmployeeBookingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const accentColor = useMemo(
+    () => sanitizeHexColor(business?.brand_primary_color),
+    [business?.brand_primary_color]
+  );
+
+  const publicBookingMessage = useMemo(
+    () => String(business?.public_booking_message ?? "").trim(),
+    [business?.public_booking_message]
+  );
+
+  const publicLogoUrl = useMemo(
+    () => sanitizeLogoUrl(business?.public_logo_url),
+    [business?.public_logo_url]
+  );
 
   useEffect(() => {
     const loadBase = async () => {
@@ -760,11 +798,52 @@ export default function PublicEmployeeBookingPage() {
         </div>
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8">
-          <h1 className="text-3xl font-bold tracking-tight">Reserva online</h1>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                className="inline-flex rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  color: accentColor,
+                  borderColor: hexToRgba(accentColor, 0.22),
+                  backgroundColor: hexToRgba(accentColor, 0.08),
+                }}
+              >
+                Reserva online
+              </span>
+            </div>
+
+            {publicLogoUrl ? (
+              <div className="flex items-center">
+                <img
+                  src={publicLogoUrl}
+                  alt={business?.name ? `Logo de ${business.name}` : "Logo del salón"}
+                  className="h-16 w-auto rounded-xl border border-zinc-200 bg-white p-2 object-contain"
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
+            Reserva online
+          </h1>
+
           <p className="mt-2 text-zinc-600">
             {business?.name ? `${business.name} · ` : ""}
             Reserva tu cita con {employee?.name ?? "el profesional seleccionado"}.
           </p>
+
+          {publicBookingMessage ? (
+            <div
+              className="mt-5 rounded-2xl border p-4 text-sm"
+              style={{
+                borderColor: hexToRgba(accentColor, 0.22),
+                backgroundColor: hexToRgba(accentColor, 0.06),
+                color: "#27272a",
+              }}
+            >
+              {publicBookingMessage}
+            </div>
+          ) : null}
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
@@ -881,9 +960,14 @@ export default function PublicEmployeeBookingPage() {
                           : cell.info
                           ? getSoftColorClasses(cell.info.color)
                           : "border-zinc-200 bg-white text-zinc-500"
-                      } ${
-                        cell.isSelected && !cell.isPast ? "ring-2 ring-black" : ""
                       }`}
+                      style={
+                        cell.isSelected && !cell.isPast
+                          ? {
+                              boxShadow: `0 0 0 2px ${accentColor}`,
+                            }
+                          : undefined
+                      }
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-semibold">
@@ -979,9 +1063,17 @@ export default function PublicEmployeeBookingPage() {
                         onClick={() => setSelectedTime(slot)}
                         className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
                           selectedTime === slot
-                            ? "border-black bg-black text-white"
+                            ? "text-white"
                             : "border-zinc-300 bg-white hover:border-black"
                         }`}
+                        style={
+                          selectedTime === slot
+                            ? {
+                                backgroundColor: accentColor,
+                                borderColor: accentColor,
+                              }
+                            : undefined
+                        }
                       >
                         {slot}
                       </button>
@@ -1043,7 +1135,8 @@ export default function PublicEmployeeBookingPage() {
                 <button
                   type="submit"
                   disabled={saving || !selectedTime}
-                  className="w-full rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  className="w-full rounded-xl px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: accentColor }}
                 >
                   {saving ? "Reservando..." : "Confirmar reserva"}
                 </button>
