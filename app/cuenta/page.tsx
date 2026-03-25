@@ -236,6 +236,14 @@ function getPrimaryAction(params: {
   };
 }
 
+function canManageSubscription(status: string | null | undefined) {
+  const normalizedStatus = normalizeText(status ?? "");
+
+  return ["trialing", "active", "past_due", "unpaid", "paused"].includes(
+    normalizedStatus
+  );
+}
+
 export default async function CuentaPage() {
   const { supabase, user, businessId } = await getServerBusinessContext();
 
@@ -297,6 +305,8 @@ export default async function CuentaPage() {
     plan: subscription?.plan,
     status: subscription?.status,
   });
+
+  const showCustomerPortalActions = canManageSubscription(subscription?.status);
 
   return (
     <section className="px-6 py-8">
@@ -456,14 +466,39 @@ export default async function CuentaPage() {
                 {primaryAction.label}
               </Link>
 
-              <Link
-                href="/cuenta/facturacion"
-                className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-              >
-                Facturación
-              </Link>
+              {showCustomerPortalActions ? (
+                <>
+                  <Link
+                    href="/cuenta/facturacion"
+                    className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                  >
+                    Gestionar suscripción
+                  </Link>
+
+                  <Link
+                    href="/cuenta/facturacion"
+                    className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                  >
+                    Cancelar suscripción
+                  </Link>
+                </>
+              ) : (
+                <Link
+                  href="/cuenta/facturacion"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Facturación
+                </Link>
+              )}
             </div>
           </div>
+
+          {showCustomerPortalActions ? (
+            <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+              El cambio de tarjeta, facturas, cambios de plan y cancelación se
+              gestionan de forma segura desde Stripe.
+            </div>
+          ) : null}
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-zinc-200 p-4">
