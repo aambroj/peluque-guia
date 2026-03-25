@@ -146,6 +146,8 @@ function formatSubscriptionStatus(status: string | null | undefined) {
   if (normalized === "past_due") return "Pago pendiente";
   if (normalized === "canceled") return "Cancelada";
   if (normalized === "paused") return "Pausada";
+  if (normalized === "unpaid") return "Impagada";
+  if (normalized === "incomplete") return "Pendiente de completar";
 
   return status ?? "Sin suscripción";
 }
@@ -161,7 +163,7 @@ function getSubscriptionStatusClasses(status: string | null | undefined) {
     return "border-sky-200 bg-sky-50 text-sky-700";
   }
 
-  if (normalized === "past_due") {
+  if (normalized === "past_due" || normalized === "unpaid") {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
@@ -174,6 +176,19 @@ function getSubscriptionStatusClasses(status: string | null | undefined) {
   }
 
   return "border-zinc-200 bg-zinc-50 text-zinc-700";
+}
+
+function hasAdvancedDashboardAccess(
+  plan: string | null | undefined,
+  status: string | null | undefined
+) {
+  const normalizedPlan = normalizeText(plan ?? "");
+  const normalizedStatus = normalizeText(status ?? "");
+
+  const validStatus = ["trialing", "active", "past_due", "unpaid", "paused"];
+  const validPlan = ["pro", "premium"];
+
+  return validPlan.includes(normalizedPlan) && validStatus.includes(normalizedStatus);
 }
 
 export default async function DashboardPage() {
@@ -365,6 +380,11 @@ export default async function DashboardPage() {
   const subscriptionInfo =
     (subscriptionDetalle ?? null) as SubscriptionSummary | null;
 
+  const advancedDashboardEnabled = hasAdvancedDashboardAccess(
+    subscriptionInfo?.plan,
+    subscriptionInfo?.status
+  );
+
   const empleadosActivosCount =
     (empleadosDetalle ?? []).filter(
       (empleado: any) =>
@@ -487,29 +507,38 @@ export default async function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              href="/reservas/nuevo"
-              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              Nueva reserva
-            </Link>
+           <Link
+            href="/reservas/nuevo"
+            className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+           >
+            Nueva reserva
+           </Link>
 
-            <Link
-              href="/clientes/nuevo"
-              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Nuevo cliente
-            </Link>
+          <Link
+           href="/clientes/nuevo"
+            className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+          >
+            Nuevo cliente
+          </Link>
 
-            <Link
-              href="/empleados/nuevo"
-              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Nuevo empleado
-            </Link>
+          <Link
+           href="/empleados/nuevo"
+           className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+          >
+            Nuevo empleado
+          </Link>
 
-            <LogoutButton />
-          </div>
+         {advancedDashboardEnabled ? (
+          <Link
+           href="/api/export/reservas"
+           className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+          >
+            Exportar reservas CSV
+          </Link>
+        ) : null}
+
+         <LogoutButton />
+         </div>
         </div>
 
         {errores.length > 0 ? (
@@ -544,7 +573,9 @@ export default async function DashboardPage() {
               {formatPlanLabel(subscriptionInfo?.plan)}
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              Base SaaS preparada para futuros planes y mejoras.
+              {advancedDashboardEnabled
+                ? "Dashboard avanzado desbloqueado para este plan."
+                : "Mejora a Pro o Premium para desbloquear métricas avanzadas."}
             </p>
           </div>
 
@@ -609,139 +640,191 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {!advancedDashboardEnabled ? (
           <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
-            <p className="text-sm font-medium text-sky-700">Próximos 7 días</p>
-            <p className="mt-3 text-4xl font-bold tracking-tight text-sky-900">
-              {reservasProximos7Count ?? 0}
-            </p>
-            <p className="mt-2 text-sm text-sky-700/80">
-              Reservas entre hoy y los próximos 7 días
-            </p>
-          </div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-sky-900">
+                  Dashboard avanzado disponible en Pro y Premium
+                </h3>
+                <p className="mt-2 text-sm text-sky-800">
+                  Desbloquea métricas avanzadas como previsión de reservas,
+                  recaudación detallada por empleado, actividad del equipo y
+                  análisis ampliado del negocio.
+                </p>
 
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-            <p className="text-sm font-medium text-emerald-700">
-              Futuras confirmadas
-            </p>
-            <p className="mt-3 text-4xl font-bold tracking-tight text-emerald-900">
-              {confirmadasFuturasCount ?? 0}
-            </p>
-            <p className="mt-2 text-sm text-emerald-700/80">
-              Citas posteriores a hoy listas para atender
-            </p>
-          </div>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-white px-3 py-1 font-medium text-sky-800">
+                    Próximos 7 días
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-medium text-sky-800">
+                    Recaudación por empleado
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-medium text-sky-800">
+                    Actividad del equipo
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-medium text-sky-800">
+                    Métricas ampliadas
+                  </span>
+                </div>
+              </div>
 
-          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-            <p className="text-sm font-medium text-amber-700">
-              Futuras pendientes
-            </p>
-            <p className="mt-3 text-4xl font-bold tracking-tight text-amber-900">
-              {pendientesFuturasCount ?? 0}
-            </p>
-            <p className="mt-2 text-sm text-amber-700/80">
-              Pendientes de confirmar después de hoy
-            </p>
-          </div>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/cuenta/planes"
+                  className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  Mejorar a Pro o Premium
+                </Link>
 
-          <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 shadow-sm">
-            <p className="text-sm font-medium text-rose-700">
-              Futuras canceladas
-            </p>
-            <p className="mt-3 text-4xl font-bold tracking-tight text-rose-900">
-              {canceladasFuturasCount ?? 0}
-            </p>
-            <p className="mt-2 text-sm text-rose-700/80">
-              Citas posteriores a hoy anuladas
-            </p>
+                <Link
+                  href="/cuenta"
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Ver suscripción
+                </Link>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
+                <p className="text-sm font-medium text-sky-700">
+                  Próximos 7 días
+                </p>
+                <p className="mt-3 text-4xl font-bold tracking-tight text-sky-900">
+                  {reservasProximos7Count ?? 0}
+                </p>
+                <p className="mt-2 text-sm text-sky-700/80">
+                  Reservas entre hoy y los próximos 7 días
+                </p>
+              </div>
 
-        <div className="grid gap-4 xl:grid-cols-4">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-zinc-500">Estado de hoy</p>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
-              {confirmadasHoy} confirmadas · {pendientesHoy} pendientes
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              {completadasHoy} completadas · {canceladasHoy} canceladas
-            </p>
-          </div>
+              <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+                <p className="text-sm font-medium text-emerald-700">
+                  Futuras confirmadas
+                </p>
+                <p className="mt-3 text-4xl font-bold tracking-tight text-emerald-900">
+                  {confirmadasFuturasCount ?? 0}
+                </p>
+                <p className="mt-2 text-sm text-emerald-700/80">
+                  Citas posteriores a hoy listas para atender
+                </p>
+              </div>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-zinc-500">
-              Empleado con más carga hoy
-            </p>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
-              {empleadoTopHoy?.name ?? "Sin reservas hoy"}
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              {empleadoTopHoy
-                ? `${empleadoTopHoy.count} reserva(s) activas hoy`
-                : "No hay citas activas para repartir"}
-            </p>
-          </div>
+              <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+                <p className="text-sm font-medium text-amber-700">
+                  Futuras pendientes
+                </p>
+                <p className="mt-3 text-4xl font-bold tracking-tight text-amber-900">
+                  {pendientesFuturasCount ?? 0}
+                </p>
+                <p className="mt-2 text-sm text-amber-700/80">
+                  Pendientes de confirmar después de hoy
+                </p>
+              </div>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-zinc-500">
-              Servicio más solicitado hoy
-            </p>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
-              {servicioTopHoy?.name ?? "Sin reservas hoy"}
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              {servicioTopHoy
-                ? `${servicioTopHoy.count} reserva(s) activas hoy`
-                : "Todavía no hay citas activas"}
-            </p>
-          </div>
+              <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 shadow-sm">
+                <p className="text-sm font-medium text-rose-700">
+                  Futuras canceladas
+                </p>
+                <p className="mt-3 text-4xl font-bold tracking-tight text-rose-900">
+                  {canceladasFuturasCount ?? 0}
+                </p>
+                <p className="mt-2 text-sm text-rose-700/80">
+                  Citas posteriores a hoy anuladas
+                </p>
+              </div>
+            </div>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-zinc-500">
-              Empleados con reserva online
-            </p>
-            <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
-              {empleadosOnlineCount}
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              Disponibles para reservas públicas
-            </p>
-          </div>
-        </div>
+            <div className="grid gap-4 xl:grid-cols-4">
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-zinc-500">Estado de hoy</p>
+                <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
+                  {confirmadasHoy} confirmadas · {pendientesHoy} pendientes
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  {completadasHoy} completadas · {canceladasHoy} canceladas
+                </p>
+              </div>
 
-        <div className="grid gap-6 xl:grid-cols-2">
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-            <p className="text-sm font-medium text-emerald-700">
-              Recaudación total de hoy
-            </p>
-            <p className="mt-3 text-4xl font-bold tracking-tight text-emerald-900">
-              {formatCurrency(totalRecaudacionHoy)}
-            </p>
-            <p className="mt-2 text-sm text-emerald-700/80">
-              {topRecaudacionHoy
-                ? `${topRecaudacionHoy.name} lidera hoy con ${formatCurrency(
-                    topRecaudacionHoy.amount
-                  )}`
-                : "Todavía no hay ingresos registrados hoy"}
-            </p>
-          </div>
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-zinc-500">
+                  Empleado con más carga hoy
+                </p>
+                <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
+                  {empleadoTopHoy?.name ?? "Sin reservas hoy"}
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  {empleadoTopHoy
+                    ? `${empleadoTopHoy.count} reserva(s) activas hoy`
+                    : "No hay citas activas para repartir"}
+                </p>
+              </div>
 
-          <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
-            <p className="text-sm font-medium text-sky-700">
-              Recaudación del mes
-            </p>
-            <p className="mt-3 text-4xl font-bold tracking-tight text-sky-900">
-              {formatCurrency(totalRecaudacionMes)}
-            </p>
-            <p className="mt-2 text-sm text-sky-700/80">
-              {topRecaudacionMes
-                ? `${topRecaudacionMes.name} lidera ${mesActualLabel} con ${formatCurrency(
-                    topRecaudacionMes.amount
-                  )}`
-                : `Todavía no hay ingresos registrados en ${mesActualLabel}`}
-            </p>
-          </div>
-        </div>
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-zinc-500">
+                  Servicio más solicitado hoy
+                </p>
+                <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
+                  {servicioTopHoy?.name ?? "Sin reservas hoy"}
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  {servicioTopHoy
+                    ? `${servicioTopHoy.count} reserva(s) activas hoy`
+                    : "Todavía no hay citas activas"}
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <p className="text-sm font-medium text-zinc-500">
+                  Empleados con reserva online
+                </p>
+                <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
+                  {empleadosOnlineCount}
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Disponibles para reservas públicas
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+                <p className="text-sm font-medium text-emerald-700">
+                  Recaudación total de hoy
+                </p>
+                <p className="mt-3 text-4xl font-bold tracking-tight text-emerald-900">
+                  {formatCurrency(totalRecaudacionHoy)}
+                </p>
+                <p className="mt-2 text-sm text-emerald-700/80">
+                  {topRecaudacionHoy
+                    ? `${topRecaudacionHoy.name} lidera hoy con ${formatCurrency(
+                        topRecaudacionHoy.amount
+                      )}`
+                    : "Todavía no hay ingresos registrados hoy"}
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
+                <p className="text-sm font-medium text-sky-700">
+                  Recaudación del mes
+                </p>
+                <p className="mt-3 text-4xl font-bold tracking-tight text-sky-900">
+                  {formatCurrency(totalRecaudacionMes)}
+                </p>
+                <p className="mt-2 text-sm text-sky-700/80">
+                  {topRecaudacionMes
+                    ? `${topRecaudacionMes.name} lidera ${mesActualLabel} con ${formatCurrency(
+                        topRecaudacionMes.amount
+                      )}`
+                    : `Todavía no hay ingresos registrados en ${mesActualLabel}`}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="mb-5">
@@ -814,157 +897,161 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-2">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-zinc-900">
-                  Recaudación por empleado hoy
-                </h3>
-                <p className="text-sm text-zinc-500">
-                  Ingreso contabilizado del día actual
-                </p>
-              </div>
-            </div>
-
-            {recaudacionHoyPorEmpleado.length > 0 ? (
-              <div className="space-y-3">
-                {recaudacionHoyPorEmpleado.map((empleado) => (
-                  <div
-                    key={empleado.name}
-                    className="flex items-center justify-between rounded-2xl border border-zinc-200 p-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-zinc-900">
-                        {empleado.name}
-                      </p>
-                      <p className="mt-1 text-sm text-zinc-500">
-                        {empleado.reservas} reserva(s) contabilizada(s)
-                      </p>
-                    </div>
-
-                    <div className="ml-4 text-right">
-                      <p className="text-lg font-bold text-zinc-900">
-                        {formatCurrency(empleado.amount)}
-                      </p>
-                      <p className="text-xs text-zinc-500">Hoy</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
-                No hay ingresos registrados hoy.
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-zinc-900">
-                  Recaudación por empleado del mes
-                </h3>
-                <p className="text-sm text-zinc-500">
-                  Ingreso contabilizado acumulado en {mesActualLabel}
-                </p>
-              </div>
-            </div>
-
-            {recaudacionMesPorEmpleado.length > 0 ? (
-              <div className="space-y-3">
-                {recaudacionMesPorEmpleado.map((empleado) => (
-                  <div
-                    key={empleado.name}
-                    className="flex items-center justify-between rounded-2xl border border-zinc-200 p-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-zinc-900">
-                        {empleado.name}
-                      </p>
-                      <p className="mt-1 text-sm text-zinc-500">
-                        {empleado.reservas} reserva(s) contabilizada(s)
-                      </p>
-                    </div>
-
-                    <div className="ml-4 text-right">
-                      <p className="text-lg font-bold text-zinc-900">
-                        {formatCurrency(empleado.amount)}
-                      </p>
-                      <p className="text-xs text-zinc-500">Mes</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
-                No hay ingresos registrados este mes.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-semibold text-zinc-900">
-                Actividad del equipo hoy
-              </h3>
-              <p className="text-sm text-zinc-500">
-                Carga de trabajo por empleado para el día actual
-              </p>
-            </div>
-
-            <Link
-              href="/empleados"
-              className="text-sm font-medium text-zinc-700 transition hover:text-black"
-            >
-              Ver empleados
-            </Link>
-          </div>
-
-          {actividadPorEmpleado.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {actividadPorEmpleado.map((empleado) => (
-                <div
-                  key={empleado.name}
-                  className="rounded-2xl border border-zinc-200 p-4"
-                >
-                  <p className="truncate text-base font-semibold text-zinc-900">
-                    {empleado.name}
-                  </p>
-
-                  <p className="mt-3 text-3xl font-bold tracking-tight text-zinc-900">
-                    {empleado.total}
-                  </p>
-
-                  <p className="mt-1 text-sm text-zinc-500">
-                    reserva(s) totales hoy
-                  </p>
-
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-700">
-                      {empleado.confirmadas} confirmadas
-                    </span>
-                    <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-700">
-                      {empleado.pendientes} pendientes
-                    </span>
-                    <span className="rounded-full bg-sky-100 px-3 py-1 font-medium text-sky-700">
-                      {empleado.completadas} completadas
-                    </span>
-                    <span className="rounded-full bg-rose-100 px-3 py-1 font-medium text-rose-700">
-                      {empleado.canceladas} canceladas
-                    </span>
+        {!advancedDashboardEnabled ? null : (
+          <>
+            <div className="grid gap-6 xl:grid-cols-2">
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-zinc-900">
+                      Recaudación por empleado hoy
+                    </h3>
+                    <p className="text-sm text-zinc-500">
+                      Ingreso contabilizado del día actual
+                    </p>
                   </div>
                 </div>
-              ))}
+
+                {recaudacionHoyPorEmpleado.length > 0 ? (
+                  <div className="space-y-3">
+                    {recaudacionHoyPorEmpleado.map((empleado) => (
+                      <div
+                        key={empleado.name}
+                        className="flex items-center justify-between rounded-2xl border border-zinc-200 p-4"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-zinc-900">
+                            {empleado.name}
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-500">
+                            {empleado.reservas} reserva(s) contabilizada(s)
+                          </p>
+                        </div>
+
+                        <div className="ml-4 text-right">
+                          <p className="text-lg font-bold text-zinc-900">
+                            {formatCurrency(empleado.amount)}
+                          </p>
+                          <p className="text-xs text-zinc-500">Hoy</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
+                    No hay ingresos registrados hoy.
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-zinc-900">
+                      Recaudación por empleado del mes
+                    </h3>
+                    <p className="text-sm text-zinc-500">
+                      Ingreso contabilizado acumulado en {mesActualLabel}
+                    </p>
+                  </div>
+                </div>
+
+                {recaudacionMesPorEmpleado.length > 0 ? (
+                  <div className="space-y-3">
+                    {recaudacionMesPorEmpleado.map((empleado) => (
+                      <div
+                        key={empleado.name}
+                        className="flex items-center justify-between rounded-2xl border border-zinc-200 p-4"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-zinc-900">
+                            {empleado.name}
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-500">
+                            {empleado.reservas} reserva(s) contabilizada(s)
+                          </p>
+                        </div>
+
+                        <div className="ml-4 text-right">
+                          <p className="text-lg font-bold text-zinc-900">
+                            {formatCurrency(empleado.amount)}
+                          </p>
+                          <p className="text-xs text-zinc-500">Mes</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
+                    No hay ingresos registrados este mes.
+                  </div>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
-              No hay reservas registradas para hoy.
+
+            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-zinc-900">
+                    Actividad del equipo hoy
+                  </h3>
+                  <p className="text-sm text-zinc-500">
+                    Carga de trabajo por empleado para el día actual
+                  </p>
+                </div>
+
+                <Link
+                  href="/empleados"
+                  className="text-sm font-medium text-zinc-700 transition hover:text-black"
+                >
+                  Ver empleados
+                </Link>
+              </div>
+
+              {actividadPorEmpleado.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {actividadPorEmpleado.map((empleado) => (
+                    <div
+                      key={empleado.name}
+                      className="rounded-2xl border border-zinc-200 p-4"
+                    >
+                      <p className="truncate text-base font-semibold text-zinc-900">
+                        {empleado.name}
+                      </p>
+
+                      <p className="mt-3 text-3xl font-bold tracking-tight text-zinc-900">
+                        {empleado.total}
+                      </p>
+
+                      <p className="mt-1 text-sm text-zinc-500">
+                        reserva(s) totales hoy
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-700">
+                          {empleado.confirmadas} confirmadas
+                        </span>
+                        <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-700">
+                          {empleado.pendientes} pendientes
+                        </span>
+                        <span className="rounded-full bg-sky-100 px-3 py-1 font-medium text-sky-700">
+                          {empleado.completadas} completadas
+                        </span>
+                        <span className="rounded-full bg-rose-100 px-3 py-1 font-medium text-rose-700">
+                          {empleado.canceladas} canceladas
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-zinc-200 p-4 text-sm text-zinc-500">
+                  No hay reservas registradas para hoy.
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
 
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
