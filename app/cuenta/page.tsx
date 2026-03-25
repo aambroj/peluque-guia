@@ -1,3 +1,4 @@
+import StripePortalButton from "@/components/StripePortalButton";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
@@ -463,7 +464,7 @@ export default async function CuentaPage() {
                 href={primaryAction.href}
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
               >
-                {primaryAction.label}
+               {primaryAction.label}
               </Link>
 
               {showCustomerPortalActions ? (
@@ -475,12 +476,9 @@ export default async function CuentaPage() {
                     Gestionar suscripción
                   </Link>
 
-                  <Link
-                    href="/cuenta/facturacion"
-                    className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
-                  >
+                  <StripePortalButton className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50">
                     Cancelar suscripción
-                  </Link>
+                  </StripePortalButton>
                 </>
               ) : (
                 <Link
@@ -491,7 +489,6 @@ export default async function CuentaPage() {
                 </Link>
               )}
             </div>
-          </div>
 
           {showCustomerPortalActions ? (
             <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
