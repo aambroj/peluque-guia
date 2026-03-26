@@ -272,7 +272,7 @@ export default async function DashboardPage() {
 
   const madridToday = getMadridDateAtNoonUTC();
   const today = toDateValue(madridToday);
-  const next7 = toDateValue(addDays(madridToday, 7));
+  const next7End = toDateValue(addDays(madridToday, 6));
 
   const monthStart = `${madridToday.getUTCFullYear()}-${String(
     madridToday.getUTCMonth() + 1
@@ -314,6 +314,7 @@ export default async function DashboardPage() {
     { data: reservasHoyDetalle, error: reservasHoyDetalleError },
     { data: reservasMesDetalle, error: reservasMesDetalleError },
     { data: reservasUltimos7Detalle, error: reservasUltimos7DetalleError },
+    { data: reservasProximos7Detalle, error: reservasProximos7DetalleError },
   ] = await Promise.all([
     supabase
       .from("businesses")
@@ -354,7 +355,8 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId)
       .gte("date", today)
-      .lte("date", next7),
+      .lte("date", next7End)
+      .neq("status", "Cancelada"),
 
     supabase
       .from("reservas")
@@ -397,7 +399,7 @@ export default async function DashboardPage() {
 
     supabase
       .from("clientes")
-      .select("*")
+      .select("id, name, phone, last_visit, visits")
       .eq("business_id", businessId)
       .order("id", { ascending: false })
       .limit(5),
@@ -441,6 +443,13 @@ export default async function DashboardPage() {
       .eq("business_id", businessId)
       .gte("date", last7Start)
       .lte("date", today),
+
+    supabase
+      .from("reservas")
+      .select("id, date, status")
+      .eq("business_id", businessId)
+      .gte("date", today)
+      .lte("date", next7End),
   ]);
 
   const errores = [
@@ -459,6 +468,7 @@ export default async function DashboardPage() {
     reservasHoyDetalleError,
     reservasMesDetalleError,
     reservasUltimos7DetalleError,
+    reservasProximos7DetalleError,
   ].filter(Boolean);
 
   const businessInfo = (businessDetalle ?? null) as BusinessSummary | null;
@@ -486,6 +496,7 @@ export default async function DashboardPage() {
   const reservasHoy = reservasHoyDetalle ?? [];
   const reservasMes = reservasMesDetalle ?? [];
   const reservasUltimos7 = reservasUltimos7Detalle ?? [];
+  const reservasProximos7ChartSource = reservasProximos7Detalle ?? [];
 
   const confirmadasHoy =
     reservasHoy.filter((reserva) => reserva.status === "Confirmada").length ?? 0;
@@ -575,7 +586,7 @@ export default async function DashboardPage() {
 
   const reservasPorDia7 = buildUpcomingReservationsChart(
     madridToday,
-    reservasProximas ?? []
+    reservasProximos7ChartSource
   );
 
   const ingresosPorDia7 = buildRecentRevenueChart(
@@ -584,86 +595,69 @@ export default async function DashboardPage() {
   );
 
   return (
-    <section className="px-6 py-8">
+    <section className="px-4 py-6 md:px-6 md:py-8">
       <div className="mx-auto max-w-7xl space-y-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600 shadow-sm">
-              Vista general del negocio
+        <div className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-6 text-white shadow-sm md:p-8">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/80 backdrop-blur">
+                Vista general del negocio
+              </div>
+
+              <h2 className="mt-4 text-3xl font-bold tracking-tight md:text-4xl">
+                Dashboard
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300 md:text-base">
+                Controla la actividad diaria, la agenda, la recaudación y el
+                rendimiento del equipo desde un panel más visual y preparado
+                para SaaS.
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
+                  {businessInfo?.name ?? "Negocio sin nombre"}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
+                  Plan {formatPlanLabel(subscriptionInfo?.plan)}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
+                  {formatSubscriptionStatus(subscriptionInfo?.status)}
+                </span>
+                {businessInfo?.slug ? (
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
+                    /reservar/{businessInfo.slug}
+                  </span>
+                ) : null}
+              </div>
             </div>
 
-            <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
-              Dashboard
-            </h2>
+            <div className="grid gap-3 sm:grid-cols-2 xl:w-[420px]">
+              <Link
+                href="/reservas/nuevo"
+                className="rounded-2xl bg-white px-5 py-4 text-sm font-semibold text-zinc-900 transition hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                Nueva reserva
+              </Link>
 
-            <p className="mt-2 max-w-2xl text-zinc-600">
-              Consulta métricas clave, actividad de hoy, próximas reservas y
-              recaudación por empleado.
-            </p>
-          </div>
+              <Link
+                href="/clientes/nuevo"
+                className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                Nuevo cliente
+              </Link>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/reservas/nuevo"
-              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              Nueva reserva
-            </Link>
+              <Link
+                href="/empleados/nuevo"
+                className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                Nuevo empleado
+              </Link>
 
-            <Link
-              href="/clientes/nuevo"
-              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Nuevo cliente
-            </Link>
-
-            <Link
-              href="/empleados/nuevo"
-              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Nuevo empleado
-            </Link>
-
-            {advancedDashboardEnabled ? (
-              <>
-                <Link
-                  href="/exportar/reservas"
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Exportar reservas CSV
-                </Link>
-
-                <Link
-                  href="/exportar/ingresos"
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Exportar ingresos CSV
-                </Link>
-
-                <Link
-                  href="/api/export/clientes"
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Exportar clientes CSV
-                </Link>
-
-                <Link
-                  href="/api/export/servicios"
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Exportar servicios CSV
-                </Link>
-
-                <Link
-                  href="/api/export/empleados"
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Exportar empleados CSV
-                </Link>
-              </>
-            ) : null}
-
-            <LogoutButton />
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-1">
+                <LogoutButton />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -823,7 +817,7 @@ export default async function DashboardPage() {
                   {reservasProximos7Count ?? 0}
                 </p>
                 <p className="mt-2 text-sm text-sky-700/80">
-                  Reservas entre hoy y los próximos 7 días
+                  Reservas activas entre hoy y los próximos 7 días
                 </p>
               </div>
 
@@ -960,13 +954,54 @@ export default async function DashboardPage() {
         )}
 
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="mb-5">
-            <h3 className="text-xl font-semibold text-zinc-900">
-              Crear y gestionar rápido
-            </h3>
-            <p className="text-sm text-zinc-500">
-              Acciones del día a día para trabajar más rápido
-            </p>
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-zinc-900">
+                Acciones rápidas del día
+              </h3>
+              <p className="text-sm text-zinc-500">
+                Lo que más vas a usar durante la jornada
+              </p>
+            </div>
+
+            {advancedDashboardEnabled ? (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/exportar/reservas"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar reservas CSV
+                </Link>
+
+                <Link
+                  href="/exportar/ingresos"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar ingresos CSV
+                </Link>
+
+                <Link
+                  href="/api/export/clientes"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar clientes CSV
+                </Link>
+
+                <Link
+                  href="/api/export/servicios"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar servicios CSV
+                </Link>
+
+                <Link
+                  href="/api/export/empleados"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Exportar empleados CSV
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -1274,7 +1309,7 @@ export default async function DashboardPage() {
 
             <div className="space-y-3">
               {clientes && clientes.length > 0 ? (
-                clientes.map((cliente) => (
+                clientes.map((cliente: any) => (
                   <div
                     key={cliente.id}
                     className="flex items-center justify-between rounded-2xl border border-zinc-200 p-4"
@@ -1316,10 +1351,10 @@ export default async function DashboardPage() {
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="mb-5">
             <h3 className="text-xl font-semibold text-zinc-900">
-              Accesos rápidos
+              Módulos del negocio
             </h3>
             <p className="text-sm text-zinc-500">
-              Atajos para la gestión diaria del negocio
+              Atajos para la gestión diaria del salón
             </p>
           </div>
 

@@ -88,6 +88,33 @@ function LoginContent() {
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
+
+        <div className="mt-8 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+          <p className="text-sm font-semibold text-zinc-900">
+            Soporte y contacto
+          </p>
+          <p className="mt-2 text-sm text-zinc-600">
+            Para reportar errores, incidencias o sugerencias:
+          </p>
+
+          <div className="mt-3 space-y-1 text-sm">
+            <p className="font-medium text-zinc-800">Alberto Ambroj López</p>
+
+            <a
+              href="mailto:alber.ambroj@gmail.com"
+              className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+            >
+              alber.ambroj@gmail.com
+            </a>
+
+            <a
+              href="mailto:aambroj@yahoo.es"
+              className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+            >
+              aambroj@yahoo.es
+            </a>
+          </div>
+        </div>
       </div>
     </section>
   );
