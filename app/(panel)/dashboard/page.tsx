@@ -691,9 +691,9 @@ export default async function DashboardPage() {
               {businessInfo?.name ?? "Negocio sin nombre"}
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              {businessInfo?.slug
-                ? `Slug público: ${businessInfo.slug}`
-                : "Sin identificador público"}
+              {publicBookingUrl
+                ? `Web de reservas online: ${publicBookingUrl}`
+                : "Sin web de reservas online"}
             </p>
           </div>
 
