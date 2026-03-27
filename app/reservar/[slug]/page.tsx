@@ -288,20 +288,13 @@ export default function PublicBusinessBookingPage() {
       }}
     >
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/reservar"
-            className="inline-flex rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-          >
-            ← Volver
-          </Link>
-
-          {business?.slug ? (
-            <span className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500">
-              /reservar/{business.slug}
-            </span>
+        {business?.slug ? (
+          <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500">
+            Reserva online · /reservar/{business.slug}
+          </span>
+          </div>
           ) : null}
-        </div>
 
         <section className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
           <div className="grid gap-8 p-8 lg:grid-cols-[1.3fr_0.7fr] lg:p-10">
@@ -348,15 +341,8 @@ export default function PublicBusinessBookingPage() {
                     color: accentTextColor,
                   }}
                 >
-                  Elegir profesional
+                  Ver profesionales disponibles
                 </a>
-
-                <Link
-                  href="/reservar"
-                  className="inline-flex rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Ver otros salones
-                </Link>
               </div>
 
               <div className="mt-8 flex flex-wrap gap-2 text-xs">
