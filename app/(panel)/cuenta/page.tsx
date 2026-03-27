@@ -1,4 +1,5 @@
 import StripePortalButton from "@/components/StripePortalButton";
+import CopyBookingUrlButton from "@/components/CopyBookingUrlButton";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -503,6 +504,15 @@ export default async function CuentaPage() {
                     "Sin enlace de reserva online"
                   )}
                 </div>
+
+                {publicBookingUrl ? (
+                  <div className="mt-4">
+                    <CopyBookingUrlButton
+                      value={publicBookingUrl}
+                      className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-zinc-200 p-4">
@@ -773,14 +783,21 @@ export default async function CuentaPage() {
                 </button>
 
                 {publicBookingUrl ? (
-                  <a
-                    href={publicBookingUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                  >
-                    Ver reserva pública
-                  </a>
+                  <>
+                    <a
+                      href={publicBookingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                    >
+                      Ver reserva pública
+                    </a>
+
+                    <CopyBookingUrlButton
+                      value={publicBookingUrl}
+                      className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                    />
+                  </>
                 ) : (
                   <Link
                     href="/reservar"

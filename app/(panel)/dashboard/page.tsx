@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
 import LogoutButton from "@/components/LogoutButton";
 import AdvancedDashboardCharts from "@/components/AdvancedDashboardCharts";
+import CopyBookingUrlButton from "@/components/CopyBookingUrlButton";
 import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 
 const APP_URL =
@@ -668,7 +669,18 @@ export default async function DashboardPage() {
                 Nuevo empleado
               </Link>
 
-              <div className="rounded-2xl border border-white/15 bg-white/10 p-1">
+              {publicBookingUrl ? (
+                <CopyBookingUrlButton
+                  value={publicBookingUrl}
+                  className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-sm font-semibold text-white transition hover:bg-white/15"
+                />
+              ) : (
+                <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-sm font-semibold text-white/70">
+                  Sin enlace público
+                </div>
+              )}
+
+              <div className="sm:col-span-2 rounded-2xl border border-white/15 bg-white/10 p-1">
                 <LogoutButton />
               </div>
             </div>
@@ -694,11 +706,30 @@ export default async function DashboardPage() {
             <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
               {businessInfo?.name ?? "Negocio sin nombre"}
             </p>
-            <p className="mt-2 text-sm text-zinc-500 break-all">
-              {publicBookingUrl
-                ? `Web de reservas online: ${publicBookingUrl}`
-                : "Sin web de reservas online"}
-            </p>
+
+            {publicBookingUrl ? (
+              <>
+                <a
+                  href={publicBookingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block break-all text-sm text-zinc-500 underline underline-offset-2 hover:text-black"
+                >
+                  Web de reservas online: {publicBookingUrl}
+                </a>
+
+                <div className="mt-4">
+                  <CopyBookingUrlButton
+                    value={publicBookingUrl}
+                    className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-500">
+                Sin web de reservas online
+              </p>
+            )}
           </div>
 
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
