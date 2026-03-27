@@ -21,6 +21,7 @@ type Servicio = {
   name: string;
   duration_minutes: number | null;
   public_visible?: boolean | null;
+  status?: string | null;
 };
 
 type ScheduleRow = {
@@ -85,6 +86,14 @@ function isEmployeePublicBookable(employee: Empleado | null | undefined) {
     status !== "vacaciones" &&
     status !== "descanso"
   );
+}
+
+function isServicePublicBookable(service: Servicio | null | undefined) {
+  if (!service) return false;
+
+  const status = normalizeStatus(service.status);
+
+  return service.public_visible === true && (status === "" || status === "activo");
 }
 
 function parseTimeToMinutes(time: string | null | undefined) {
@@ -393,10 +402,9 @@ async function getBaseData(slug: string, employeeId: number, serviceId: number) 
 
     supabaseAdmin
       .from("servicios")
-      .select("id, business_id, name, duration_minutes, public_visible")
+      .select("id, business_id, name, duration_minutes, public_visible, status")
       .eq("id", serviceId)
       .eq("business_id", typedBusiness.id)
-      .eq("public_visible", true)
       .maybeSingle(),
 
     supabaseAdmin
@@ -434,7 +442,7 @@ async function getBaseData(slug: string, employeeId: number, serviceId: number) 
     );
   }
 
-  if (!typedService) {
+  if (!typedService || !isServicePublicBookable(typedService)) {
     throw new Error("Servicio no disponible para reserva online.");
   }
 

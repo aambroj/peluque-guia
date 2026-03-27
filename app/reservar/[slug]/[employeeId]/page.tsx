@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 type Servicio = {
   id: number;
   name: string;
+  status?: string | null;
 };
 
 type BusinessPublic = {
@@ -187,6 +188,14 @@ function isEmployeePublicBookable(employee: Empleado | null) {
     status !== "vacaciones" &&
     status !== "inactivo"
   );
+}
+
+function isServicePublicBookable(service: Servicio | null) {
+  if (!service) return false;
+
+  const status = normalizeStatus(service.status);
+
+  return status === "" || status === "activo";
 }
 
 function getTodayMonth() {
@@ -454,9 +463,10 @@ export default function PublicEmployeeBookingPage() {
 
           supabase
             .from("servicios")
-            .select("id, name")
+            .select("id, name, status")
             .eq("business_id", businessData.id)
             .eq("public_visible", true)
+            .or("status.is.null,status.eq.Activo")
             .order("name", { ascending: true }),
 
           supabase
@@ -494,11 +504,13 @@ export default function PublicEmployeeBookingPage() {
           );
         }
 
-        const loadedServices = (servicesRes.data ?? []) as Servicio[];
+        const loadedServices = ((servicesRes.data ?? []) as Servicio[]).filter(
+          isServicePublicBookable
+        );
 
         if (loadedServices.length === 0) {
           throw new Error(
-            "No hay servicios disponibles para reserva online en este salón."
+            "No hay servicios activos disponibles para reserva online en este salón."
           );
         }
 
@@ -521,6 +533,22 @@ export default function PublicEmployeeBookingPage() {
 
     loadBase();
   }, [slug, employeeId]);
+
+  useEffect(() => {
+    if (!services.length) {
+      setServiceId("");
+      return;
+    }
+
+    const exists = services.some((service) => String(service.id) === serviceId);
+
+    if (!exists) {
+      setServiceId(String(services[0].id));
+      setSelectedTime("");
+      setBookingSuccess(null);
+      setError("");
+    }
+  }, [services, serviceId]);
 
   useEffect(() => {
     const loadMonth = async () => {

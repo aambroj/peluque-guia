@@ -25,6 +25,12 @@ type TimeOffRow = {
   is_full_day: boolean;
 };
 
+type ServicioOption = {
+  id: number;
+  name: string;
+  status?: string | null;
+};
+
 const ALLOWED_STATUSES = new Set([
   "Pendiente",
   "Confirmada",
@@ -421,6 +427,17 @@ export default async function EditarReservaPage({
       );
     }
 
+    const serviceStatus = normalizeStatus((servicioSeleccionado as any).status);
+
+    if (
+      serviceStatus === "desactivado" &&
+      reservaActual.service_id !== service_id
+    ) {
+      redirect(
+        `/reservas/editar/${id}?error=No+puedes+asignar+un+servicio+desactivado`
+      );
+    }
+
     if (horarioError) {
       redirect(
         `/reservas/editar/${id}?error=${encodeURIComponent(
@@ -612,7 +629,7 @@ export default async function EditarReservaPage({
     { data: reserva, error: reservaError },
     { data: clientes, error: clientesError },
     { data: empleados, error: empleadosError },
-    { data: servicios, error: serviciosError },
+    { data: serviciosActivos, error: serviciosError },
   ] = await Promise.all([
     supabaseAdmin
       .from("reservas")
@@ -637,10 +654,38 @@ export default async function EditarReservaPage({
 
     supabaseAdmin
       .from("servicios")
-      .select("id, name")
+      .select("id, name, status")
       .eq("business_id", businessId)
+      .eq("status", "Activo")
       .order("name", { ascending: true }),
   ]);
+
+  let servicioActualDesactivado: ServicioOption | null = null;
+  let servicioActualDesactivadoError: string | null = null;
+
+  if (
+    reserva &&
+    reserva.service_id &&
+    !(serviciosActivos ?? []).some((s) => s.id === reserva.service_id)
+  ) {
+    const { data, error } = await supabaseAdmin
+      .from("servicios")
+      .select("id, name, status")
+      .eq("id", reserva.service_id)
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    if (error) {
+      servicioActualDesactivadoError = error.message;
+    } else if (data) {
+      servicioActualDesactivado = data as ServicioOption;
+    }
+  }
+
+  const serviciosOptions: ServicioOption[] = [
+    ...((serviciosActivos ?? []) as ServicioOption[]),
+    ...(servicioActualDesactivado ? [servicioActualDesactivado] : []),
+  ];
 
   const errores = [
     actionError || null,
@@ -648,6 +693,7 @@ export default async function EditarReservaPage({
     clientesError?.message,
     empleadosError?.message,
     serviciosError?.message,
+    servicioActualDesactivadoError,
   ].filter(Boolean);
 
   if (!reserva && !reservaError) {
@@ -777,12 +823,23 @@ export default async function EditarReservaPage({
                 className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-black"
               >
                 <option value="">Selecciona un servicio</option>
-                {(servicios ?? []).map((servicio) => (
-                  <option key={servicio.id} value={servicio.id}>
-                    {servicio.name}
-                  </option>
-                ))}
+                {serviciosOptions.map((servicio) => {
+                  const isDeactivated =
+                    normalizeStatus(servicio.status) === "desactivado";
+
+                  return (
+                    <option key={servicio.id} value={servicio.id}>
+                      {servicio.name}
+                      {isDeactivated ? " (desactivado)" : ""}
+                    </option>
+                  );
+                })}
               </select>
+
+              <p className="mt-2 text-sm text-zinc-500">
+                Solo se muestran servicios activos. Si esta reserva ya tenía un
+                servicio desactivado, se mantiene visible para no romper la edición.
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

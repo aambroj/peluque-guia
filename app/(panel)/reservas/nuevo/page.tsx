@@ -24,6 +24,11 @@ type Empleado = {
 type Servicio = {
   id: number;
   name: string;
+  status?: string | null;
+  is_active?: boolean | null;
+  active?: boolean | null;
+  enabled?: boolean | null;
+  [key: string]: any;
 };
 
 type ScheduleRow = {
@@ -63,6 +68,10 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function normalizeStatus(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
 function parseTimeToMinutes(time: string | null | undefined) {
   if (!time) return null;
 
@@ -97,6 +106,29 @@ function hasValidWorkingSchedule(rows: ScheduleRow[] | null | undefined) {
   });
 }
 
+function isServiceEnabled(servicio: Servicio | null | undefined) {
+  if (!servicio) return false;
+
+  if ("is_active" in servicio && servicio.is_active === false) return false;
+  if ("active" in servicio && servicio.active === false) return false;
+  if ("enabled" in servicio && servicio.enabled === false) return false;
+
+  const status = normalizeStatus(servicio.status);
+
+  if (
+    status === "inactivo" ||
+    status === "desactivado" ||
+    status === "archivado" ||
+    status === "disabled" ||
+    status === "inactive" ||
+    status === "archived"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export default function NuevaReservaPage() {
   const router = useRouter();
 
@@ -105,6 +137,8 @@ export default function NuevaReservaPage() {
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [hiddenEmployeesWithoutSchedule, setHiddenEmployeesWithoutSchedule] =
     useState<Empleado[]>([]);
+  const [hiddenDisabledServicesCount, setHiddenDisabledServicesCount] =
+    useState(0);
 
   const [clientSearch, setClientSearch] = useState("");
   const [showClientDropdown, setShowClientDropdown] = useState(false);
@@ -184,7 +218,7 @@ export default function NuevaReservaPage() {
 
           supabaseBrowser
             .from("servicios")
-            .select("id, name")
+            .select("*")
             .eq("business_id", businessId)
             .order("name", { ascending: true }),
 
@@ -236,16 +270,32 @@ export default function NuevaReservaPage() {
         )
         .map(({ id, name, status }) => ({ id, name, status }));
 
+      const serviciosCargados = (serviciosRes.data ?? []) as Servicio[];
+      const serviciosActivos = serviciosCargados.filter(isServiceEnabled);
+      const serviciosDesactivadosCount =
+        serviciosCargados.length - serviciosActivos.length;
+
       setClientes((clientesRes.data ?? []) as Cliente[]);
       setEmpleados(empleadosConHorario);
-      setServicios((serviciosRes.data ?? []) as Servicio[]);
+      setServicios(
+        serviciosActivos.map((servicio) => ({
+          id: servicio.id,
+          name: servicio.name,
+          status: servicio.status,
+          is_active: servicio.is_active,
+          active: servicio.active,
+          enabled: servicio.enabled,
+        }))
+      );
       setHiddenEmployeesWithoutSchedule(empleadosSinHorario);
+      setHiddenDisabledServicesCount(serviciosDesactivadosCount);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar datos");
       setClientes([]);
       setEmpleados([]);
       setServicios([]);
       setHiddenEmployeesWithoutSchedule([]);
+      setHiddenDisabledServicesCount(0);
     } finally {
       setLoadingData(false);
     }
@@ -278,6 +328,28 @@ export default function NuevaReservaPage() {
   }, [empleados, form.employee_id]);
 
   useEffect(() => {
+    if (!form.service_id) return;
+
+    const exists = servicios.some(
+      (servicio) => String(servicio.id) === form.service_id
+    );
+
+    if (!exists) {
+      setForm((prev) => ({
+        ...prev,
+        service_id: "",
+        time: "",
+      }));
+      setAvailableSlots([]);
+      setDayStatus({
+        tone: "gray",
+        title: "Sin comprobar",
+        detail: "Selecciona empleado, servicio y fecha.",
+      });
+    }
+  }, [servicios, form.service_id]);
+
+  useEffect(() => {
     const loadAvailability = async () => {
       if (!form.employee_id || !form.service_id || !form.date) {
         setAvailableSlots([]);
@@ -286,6 +358,21 @@ export default function NuevaReservaPage() {
           tone: "gray",
           title: "Sin comprobar",
           detail: "Selecciona empleado, servicio y fecha.",
+        });
+        return;
+      }
+
+      const selectedServiceExists = servicios.some(
+        (servicio) => String(servicio.id) === form.service_id
+      );
+
+      if (!selectedServiceExists) {
+        setAvailableSlots([]);
+        setForm((prev) => ({ ...prev, time: "" }));
+        setDayStatus({
+          tone: "red",
+          title: "Servicio no disponible",
+          detail: "El servicio seleccionado está desactivado o ya no existe.",
         });
         return;
       }
@@ -375,7 +462,7 @@ export default function NuevaReservaPage() {
     };
 
     loadAvailability();
-  }, [form.employee_id, form.service_id, form.date]);
+  }, [form.employee_id, form.service_id, form.date, servicios]);
 
   const filteredClientes = useMemo(() => {
     const normalizedSearch = normalizeText(clientSearch);
@@ -485,6 +572,16 @@ export default function NuevaReservaPage() {
 
       if (!form.time) {
         throw new Error("Debes seleccionar una hora disponible.");
+      }
+
+      const selectedService = servicios.find(
+        (servicio) => String(servicio.id) === form.service_id
+      );
+
+      if (!selectedService) {
+        throw new Error(
+          "El servicio seleccionado está desactivado o ya no está disponible."
+        );
       }
 
       const clientId = Number(form.client_id);
@@ -713,6 +810,22 @@ export default function NuevaReservaPage() {
                   </option>
                 ))}
               </select>
+
+              {hiddenDisabledServicesCount > 0 ? (
+                <p className="mt-2 text-sm text-amber-700">
+                  Se ocultan {hiddenDisabledServicesCount} servicio
+                  {hiddenDisabledServicesCount === 1 ? "" : "s"} desactivado
+                  {hiddenDisabledServicesCount === 1 ? "" : "s"}.
+                </p>
+              ) : servicios.length > 0 ? (
+                <p className="mt-2 text-sm text-zinc-500">
+                  Solo se muestran servicios activos.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-red-600">
+                  No hay servicios activos disponibles.
+                </p>
+              )}
             </div>
 
             <div
@@ -818,7 +931,7 @@ export default function NuevaReservaPage() {
             <div className="flex gap-3">
               <button
                 type="submit"
-                disabled={loading || loadingSlots}
+                disabled={loading || loadingSlots || servicios.length === 0}
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
               >
                 {loading ? "Guardando..." : "Guardar reserva"}

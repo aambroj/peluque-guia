@@ -198,6 +198,41 @@ function getLocalDateValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function isServiceEnabled(servicio: Record<string, any> | null | undefined) {
+  if (!servicio) return false;
+
+  if ("public_visible" in servicio && servicio.public_visible !== true) {
+    return false;
+  }
+
+  if ("is_active" in servicio && servicio.is_active === false) {
+    return false;
+  }
+
+  if ("active" in servicio && servicio.active === false) {
+    return false;
+  }
+
+  if ("enabled" in servicio && servicio.enabled === false) {
+    return false;
+  }
+
+  const status = normalizeStatus(servicio.status);
+
+  if (
+    status === "inactivo" ||
+    status === "desactivado" ||
+    status === "archivado" ||
+    status === "disabled" ||
+    status === "inactive" ||
+    status === "archived"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function POST(request: Request) {
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -342,7 +377,6 @@ export async function POST(request: Request) {
         .select("*")
         .eq("id", service_id)
         .eq("business_id", businessId)
-        .eq("public_visible", true)
         .maybeSingle(),
 
       supabaseAdmin
@@ -460,10 +494,19 @@ export async function POST(request: Request) {
     if (!servicio) {
       return NextResponse.json(
         {
-          error:
-            "El servicio seleccionado no existe o no está visible para reserva online en este salón.",
+          error: "El servicio seleccionado no existe en este salón.",
         },
         { status: 400 }
+      );
+    }
+
+    if (!isServiceEnabled(servicio as Record<string, any>)) {
+      return NextResponse.json(
+        {
+          error:
+            "El servicio seleccionado está desactivado y no se puede reservar online.",
+        },
+        { status: 409 }
       );
     }
 

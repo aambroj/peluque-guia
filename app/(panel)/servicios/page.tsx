@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
+type ServiceStatus = "Activo" | "Inactivo";
+
 type ServicioRow = {
   id: number;
   name: string;
@@ -12,6 +14,7 @@ type ServicioRow = {
   duration_minutes: number | null;
   description: string | null;
   public_visible?: boolean | null;
+  status?: string | null;
 };
 
 type ServicioFormRow = {
@@ -22,6 +25,7 @@ type ServicioFormRow = {
   duration_minutes: string;
   description: string;
   public_visible: boolean;
+  status: ServiceStatus;
 };
 
 type NewServiceForm = {
@@ -40,6 +44,18 @@ function toInputString(value: number | string | null | undefined) {
 
 function normalizePriceInput(value: string) {
   return value.replace(",", ".").trim();
+}
+
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function normalizeServiceStatus(value: string | null | undefined): ServiceStatus {
+  return normalizeText(value) === "inactivo" ? "Inactivo" : "Activo";
 }
 
 function getEmptyNewService(): NewServiceForm {
@@ -68,6 +84,16 @@ export default function ServiciosPage() {
   const [success, setSuccess] = useState("");
 
   const savingSet = useMemo(() => new Set(savingIds), [savingIds]);
+
+  const serviciosActivos = useMemo(
+    () => servicios.filter((row) => row.status === "Activo"),
+    [servicios]
+  );
+
+  const serviciosInactivos = useMemo(
+    () => servicios.filter((row) => row.status === "Inactivo"),
+    [servicios]
+  );
 
   const resolveBusinessId = useCallback(async () => {
     const {
@@ -116,7 +142,7 @@ export default function ServiciosPage() {
     const { data, error } = await supabaseBrowser
       .from("servicios")
       .select(
-        "id, name, category, price, duration_minutes, description, public_visible"
+        "id, name, category, price, duration_minutes, description, public_visible, status"
       )
       .eq("business_id", resolvedBusinessId)
       .order("id", { ascending: true });
@@ -135,6 +161,7 @@ export default function ServiciosPage() {
       duration_minutes: toInputString(item.duration_minutes),
       description: item.description ?? "",
       public_visible: item.public_visible ?? true,
+      status: normalizeServiceStatus(item.status),
     }));
 
     setServicios(rows);
@@ -219,7 +246,8 @@ export default function ServiciosPage() {
       price: parsed.priceNumber,
       duration_minutes: parsed.durationNumber,
       description: row.description.trim() || null,
-      public_visible: row.public_visible,
+      public_visible: row.status === "Inactivo" ? false : row.public_visible,
+      status: row.status,
     };
 
     const { error } = await supabaseBrowser
@@ -236,6 +264,18 @@ export default function ServiciosPage() {
       );
       return false;
     }
+
+    setServicios((prev) =>
+      prev.map((item) =>
+        item.id === row.id
+          ? {
+              ...item,
+              ...row,
+              public_visible: row.status === "Inactivo" ? false : row.public_visible,
+            }
+          : item
+      )
+    );
 
     setSuccess(`Servicio "${row.name}" guardado correctamente.`);
     return true;
@@ -289,13 +329,14 @@ export default function ServiciosPage() {
       duration_minutes: parsed.durationNumber,
       description: newService.description.trim() || null,
       public_visible: newService.public_visible,
+      status: "Activo" as ServiceStatus,
     };
 
     const { data, error } = await supabaseBrowser
       .from("servicios")
       .insert([payload])
       .select(
-        "id, name, category, price, duration_minutes, description, public_visible"
+        "id, name, category, price, duration_minutes, description, public_visible, status"
       )
       .single();
 
@@ -315,6 +356,7 @@ export default function ServiciosPage() {
         duration_minutes: toInputString(data.duration_minutes),
         description: data.description ?? "",
         public_visible: data.public_visible ?? true,
+        status: normalizeServiceStatus(data.status),
       };
 
       setServicios((prev) => [...prev, newRow].sort((a, b) => a.id - b.id));
@@ -322,6 +364,98 @@ export default function ServiciosPage() {
 
     setNewService(getEmptyNewService());
     setSuccess(`Servicio "${payload.name}" creado correctamente.`);
+  };
+
+  const deactivateService = async (row: ServicioFormRow) => {
+    setError("");
+    setSuccess("");
+
+    if (!businessId) {
+      setError("No se ha podido resolver el negocio actual.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Seguro que quieres desactivar el servicio "${row.name}"?`
+    );
+
+    if (!confirmed) return;
+
+    setSavingIds((prev) => [...prev, row.id]);
+
+    const { error } = await supabaseBrowser
+      .from("servicios")
+      .update({
+        status: "Inactivo",
+        public_visible: false,
+      })
+      .eq("id", row.id)
+      .eq("business_id", businessId);
+
+    setSavingIds((prev) => prev.filter((id) => id !== row.id));
+
+    if (error) {
+      setError(
+        `No se pudo desactivar "${row.name}": ${error.message || "error desconocido"}`
+      );
+      return;
+    }
+
+    setServicios((prev) =>
+      prev.map((item) =>
+        item.id === row.id
+          ? {
+              ...item,
+              status: "Inactivo",
+              public_visible: false,
+            }
+          : item
+      )
+    );
+
+    setSuccess(`Servicio "${row.name}" desactivado correctamente.`);
+  };
+
+  const reactivateService = async (row: ServicioFormRow) => {
+    setError("");
+    setSuccess("");
+
+    if (!businessId) {
+      setError("No se ha podido resolver el negocio actual.");
+      return;
+    }
+
+    setSavingIds((prev) => [...prev, row.id]);
+
+    const { error } = await supabaseBrowser
+      .from("servicios")
+      .update({
+        status: "Activo",
+      })
+      .eq("id", row.id)
+      .eq("business_id", businessId);
+
+    setSavingIds((prev) => prev.filter((id) => prev.filter((id) => id !== row.id)));
+
+    if (error) {
+      setError(
+        `No se pudo reactivar "${row.name}": ${error.message || "error desconocido"}`
+      );
+      return;
+    }
+
+    setServicios((prev) =>
+      prev.map((item) =>
+        item.id === row.id
+          ? {
+              ...item,
+              status: "Activo",
+            }
+          : item
+      )
+    );
+
+    setSuccess(`Servicio "${row.name}" reactivado correctamente.`);
   };
 
   if (loading) {
@@ -342,8 +476,9 @@ export default function ServiciosPage() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Servicios</h1>
               <p className="mt-2 text-zinc-600">
-                Aquí el dueño puede crear nuevos servicios y cambiar precios,
-                duración y visibilidad online.
+                Aquí el dueño puede crear nuevos servicios, cambiar precios,
+                duración, visibilidad online y desactivar los que ya no quiera
+                usar.
               </p>
             </div>
 
@@ -482,121 +617,291 @@ export default function ServiciosPage() {
             No hay servicios registrados todavía.
           </div>
         ) : (
-          <section className="space-y-4">
+          <section className="space-y-6">
             <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">Servicios existentes</h2>
+              <h2 className="text-xl font-semibold">Servicios activos</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Edita servicios ya creados y guarda los cambios de uno en uno o
-                todos a la vez.
+                Edita servicios ya creados y desactiva los que ya no quieras
+                ofrecer.
               </p>
             </div>
 
-            {servicios.map((row) => {
-              const isSaving = savingSet.has(row.id);
+            {serviciosActivos.length === 0 ? (
+              <div className="rounded-3xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">
+                No hay servicios activos.
+              </div>
+            ) : (
+              serviciosActivos.map((row) => {
+                const isSaving = savingSet.has(row.id);
 
-              return (
-                <article
-                  key={row.id}
-                  className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
-                >
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700">
-                        Nombre
-                      </label>
-                      <input
-                        value={row.name}
-                        onChange={(e) =>
-                          updateRow(row.id, "name", e.target.value)
-                        }
-                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                      />
+                return (
+                  <article
+                    key={row.id}
+                    className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
+                  >
+                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-semibold text-zinc-900">
+                          {row.name || "Servicio"}
+                        </h3>
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                          Activo
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => deactivateService(row)}
+                          disabled={isSaving}
+                          className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                        >
+                          Desactivar servicio
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => saveRow(row)}
+                          disabled={isSaving}
+                          className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                        >
+                          {isSaving ? "Guardando..." : "Guardar este servicio"}
+                        </button>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700">
-                        Categoría
-                      </label>
-                      <input
-                        value={row.category}
-                        onChange={(e) =>
-                          updateRow(row.id, "category", e.target.value)
-                        }
-                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700">
-                        Precio
-                      </label>
-                      <input
-                        inputMode="decimal"
-                        value={row.price}
-                        onChange={(e) =>
-                          updateRow(row.id, "price", e.target.value)
-                        }
-                        placeholder="Ej. 15 o 15.50"
-                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700">
-                        Duración (min)
-                      </label>
-                      <input
-                        inputMode="numeric"
-                        value={row.duration_minutes}
-                        onChange={(e) =>
-                          updateRow(row.id, "duration_minutes", e.target.value)
-                        }
-                        placeholder="Ej. 30"
-                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_auto]">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700">
-                        Descripción
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={row.description}
-                        onChange={(e) =>
-                          updateRow(row.id, "description", e.target.value)
-                        }
-                        className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
-                      />
-                    </div>
-
-                    <div className="flex flex-col justify-between gap-4">
-                      <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Nombre
+                        </label>
                         <input
-                          type="checkbox"
-                          checked={row.public_visible}
+                          value={row.name}
                           onChange={(e) =>
-                            updateRow(row.id, "public_visible", e.target.checked)
+                            updateRow(row.id, "name", e.target.value)
                           }
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
                         />
-                        Visible online
-                      </label>
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={() => saveRow(row)}
-                        disabled={isSaving}
-                        className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                      >
-                        {isSaving ? "Guardando..." : "Guardar este servicio"}
-                      </button>
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Categoría
+                        </label>
+                        <input
+                          value={row.category}
+                          onChange={(e) =>
+                            updateRow(row.id, "category", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Precio
+                        </label>
+                        <input
+                          inputMode="decimal"
+                          value={row.price}
+                          onChange={(e) =>
+                            updateRow(row.id, "price", e.target.value)
+                          }
+                          placeholder="Ej. 15 o 15.50"
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Duración (min)
+                        </label>
+                        <input
+                          inputMode="numeric"
+                          value={row.duration_minutes}
+                          onChange={(e) =>
+                            updateRow(row.id, "duration_minutes", e.target.value)
+                          }
+                          placeholder="Ej. 30"
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
+
+                    <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_auto]">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Descripción
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={row.description}
+                          onChange={(e) =>
+                            updateRow(row.id, "description", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div className="flex flex-col justify-between gap-4">
+                        <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                          <input
+                            type="checkbox"
+                            checked={row.public_visible}
+                            onChange={(e) =>
+                              updateRow(row.id, "public_visible", e.target.checked)
+                            }
+                          />
+                          Visible online
+                        </label>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+
+            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">Servicios desactivados</h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Puedes reactivar un servicio cuando quieras. Al reactivarlo,
+                seguirá sin mostrarse online hasta que lo marques otra vez como
+                visible online.
+              </p>
+            </div>
+
+            {serviciosInactivos.length === 0 ? (
+              <div className="rounded-3xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 shadow-sm">
+                No hay servicios desactivados.
+              </div>
+            ) : (
+              serviciosInactivos.map((row) => {
+                const isSaving = savingSet.has(row.id);
+
+                return (
+                  <article
+                    key={row.id}
+                    className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm opacity-90"
+                  >
+                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-semibold text-zinc-900">
+                          {row.name || "Servicio"}
+                        </h3>
+                        <span className="rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+                          Inactivo
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => reactivateService(row)}
+                          disabled={isSaving}
+                          className="rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
+                        >
+                          Reactivar servicio
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => saveRow(row)}
+                          disabled={isSaving}
+                          className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                        >
+                          {isSaving ? "Guardando..." : "Guardar este servicio"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Nombre
+                        </label>
+                        <input
+                          value={row.name}
+                          onChange={(e) =>
+                            updateRow(row.id, "name", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Categoría
+                        </label>
+                        <input
+                          value={row.category}
+                          onChange={(e) =>
+                            updateRow(row.id, "category", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Precio
+                        </label>
+                        <input
+                          inputMode="decimal"
+                          value={row.price}
+                          onChange={(e) =>
+                            updateRow(row.id, "price", e.target.value)
+                          }
+                          placeholder="Ej. 15 o 15.50"
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Duración (min)
+                        </label>
+                        <input
+                          inputMode="numeric"
+                          value={row.duration_minutes}
+                          onChange={(e) =>
+                            updateRow(row.id, "duration_minutes", e.target.value)
+                          }
+                          placeholder="Ej. 30"
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_auto]">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700">
+                          Descripción
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={row.description}
+                          onChange={(e) =>
+                            updateRow(row.id, "description", e.target.value)
+                          }
+                          className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+
+                      <div className="flex flex-col justify-between gap-4">
+                        <label className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                          <input type="checkbox" checked={false} disabled />
+                          Visible online
+                        </label>
+
+                        <p className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                          Este servicio está desactivado.
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            )}
           </section>
         )}
       </div>
