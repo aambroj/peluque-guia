@@ -213,19 +213,21 @@ export default function RegistroPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-zinc-700">
-                  Identificador del salón
+                   Identificador del salón: es el nombre que tendrán que poner tus clientes al
+                   reservar online. Por ejemplo, si eliges <span className="font-semibold">pepe</span>,
+                   tus clientes tendrán que acceder a{" "}
+                    <span className="font-semibold">
+                      https://peluque-guia.vercel.app/reservar/pepe
+                    </span>
                 </label>
-                <input
-                  type="text"
-                  value={slug}
-                  onChange={(event) => setSlug(slugify(event.target.value))}
-                  required
-                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
-                  placeholder="peluqueria-lola"
-                />
-                <p className="mt-2 text-xs text-zinc-500">
-                  Se usará más adelante para el enlace público de reservas.
-                </p>
+                  <input
+                     type="text"
+                     value={slug}
+                      onChange={(event) => setSlug(slugify(event.target.value))}
+                      required
+                      className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                       placeholder="peluqueria-lola"
+                      />
               </div>
 
               <div>
