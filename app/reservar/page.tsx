@@ -47,29 +47,40 @@ export default async function PublicBookingHomePage() {
 
               <div className="mt-8 flex flex-wrap gap-3">
                 {businessSlug ? (
-                  <a
-                    href={publicBookingUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex rounded-2xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                  >
-                    Abrir mi página de reservas
-                  </a>
-                ) : null}
+                  <>
+                    <a
+                      href={publicBookingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex rounded-2xl bg-black px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                    >
+                      Abrir mi página de reservas
+                    </a>
 
-                <Link
-                  href="/login"
-                  className="inline-flex rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
-                >
-                  Entrar al panel
-                </Link>
+                    <Link
+                      href="/dashboard"
+                      className="inline-flex rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
+                    >
+                      Ir al panel
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      className="inline-flex rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
+                    >
+                      Entrar al panel
+                    </Link>
 
-                <Link
-                  href="/registro"
-                  className="inline-flex rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
-                >
-                  Crear negocio
-                </Link>
+                    <Link
+                      href="/registro"
+                      className="inline-flex rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50"
+                    >
+                      Crear negocio
+                    </Link>
+                  </>
+                )}
               </div>
 
               <div className="mt-8 flex flex-wrap gap-2 text-xs">
