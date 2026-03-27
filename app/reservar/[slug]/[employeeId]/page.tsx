@@ -95,6 +95,14 @@ type CalendarCell =
       info: DayItem | null;
     };
 
+type BookingSuccess = {
+  date: string;
+  time: string;
+  serviceName: string;
+  employeeName: string;
+  businessName: string | null;
+};
+
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 function normalizeStatus(value: string | null | undefined) {
@@ -338,7 +346,10 @@ function getEmployeeInitials(name: string | null | undefined) {
   if (!safe) return "PR";
 
   const parts = safe.split(/\s+/).filter(Boolean);
-  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+  const initials = parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 
   return initials || "PR";
 }
@@ -370,7 +381,9 @@ export default function PublicEmployeeBookingPage() {
   const [loadingDay, setLoadingDay] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [bookingSuccess, setBookingSuccess] = useState<BookingSuccess | null>(
+    null
+  );
 
   const accentColor = useMemo(
     () => sanitizeHexColor(business?.brand_primary_color),
@@ -390,6 +403,11 @@ export default function PublicEmployeeBookingPage() {
   const publicLogoUrl = useMemo(
     () => sanitizeLogoUrl(business?.public_logo_url),
     [business?.public_logo_url]
+  );
+
+  const selectedService = useMemo(
+    () => services.find((service) => String(service.id) === serviceId) ?? null,
+    [services, serviceId]
   );
 
   useEffect(() => {
@@ -506,7 +524,12 @@ export default function PublicEmployeeBookingPage() {
 
   useEffect(() => {
     const loadMonth = async () => {
-      if (!serviceId || !employee || !isEmployeePublicBookable(employee) || !slug) {
+      if (
+        !serviceId ||
+        !employee ||
+        !isEmployeePublicBookable(employee) ||
+        !slug
+      ) {
         return;
       }
 
@@ -591,7 +614,6 @@ export default function PublicEmployeeBookingPage() {
 
       setLoadingDay(true);
       setError("");
-      setSuccess("");
 
       try {
         const response = await fetch(
@@ -653,11 +675,18 @@ export default function PublicEmployeeBookingPage() {
 
   const canGoToPreviousMonth = month > getTodayMonth();
 
+  const resetForAnotherBooking = () => {
+    setBookingSuccess(null);
+    setError("");
+    setSelectedTime("");
+    setNotes("");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError("");
-    setSuccess("");
+    setBookingSuccess(null);
 
     try {
       if (!slug) {
@@ -727,11 +756,17 @@ export default function PublicEmployeeBookingPage() {
         throw new Error("La API no devolvió los datos de la reserva creada.");
       }
 
-      setSuccess(
-        `Reserva creada para el ${formatDate(data.booking.date)} a las ${data.booking.start_time}.`
-      );
+      setBookingSuccess({
+        date: data.booking.date,
+        time: data.booking.start_time,
+        serviceName: selectedService?.name ?? "Servicio",
+        employeeName: employee?.name ?? "Profesional",
+        businessName: business?.name ?? null,
+      });
 
       setSelectedTime("");
+      setClientName("");
+      setPhone("");
       setNotes("");
 
       const refreshDay = await fetch(
@@ -970,7 +1005,8 @@ export default function PublicEmployeeBookingPage() {
                   onChange={(e) => {
                     setServiceId(e.target.value);
                     setSelectedTime("");
-                    setSuccess("");
+                    setBookingSuccess(null);
+                    setError("");
                   }}
                   className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none transition focus:border-black"
                 >
@@ -994,7 +1030,8 @@ export default function PublicEmployeeBookingPage() {
                       if (!canGoToPreviousMonth) return;
                       setMonth(getPreviousMonth(month));
                       setSelectedTime("");
-                      setSuccess("");
+                      setBookingSuccess(null);
+                      setError("");
                     }}
                     className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -1010,7 +1047,8 @@ export default function PublicEmployeeBookingPage() {
                     onClick={() => {
                       setMonth(getNextMonth(month));
                       setSelectedTime("");
-                      setSuccess("");
+                      setBookingSuccess(null);
+                      setError("");
                     }}
                     className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black"
                   >
@@ -1065,7 +1103,8 @@ export default function PublicEmployeeBookingPage() {
                         if (cell.isPast) return;
                         setSelectedDate(cell.date);
                         setSelectedTime("");
-                        setSuccess("");
+                        setBookingSuccess(null);
+                        setError("");
                       }}
                       className={`min-h-[96px] rounded-2xl border p-3 text-left transition ${
                         cell.isPast
@@ -1121,6 +1160,82 @@ export default function PublicEmployeeBookingPage() {
             </h2>
 
             <div className="mt-4 space-y-4">
+              {bookingSuccess ? (
+                <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                  <div className="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700">
+                    Reserva confirmada
+                  </div>
+
+                  <h3 className="mt-4 text-2xl font-bold tracking-tight text-emerald-900">
+                    Tu cita ya ha quedado registrada
+                  </h3>
+
+                  <p className="mt-2 text-sm leading-6 text-emerald-800">
+                    Hemos guardado correctamente tu reserva. Este es el resumen
+                    de tu cita:
+                  </p>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-emerald-200 bg-white p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Salón
+                      </p>
+                      <p className="mt-1 text-base font-semibold text-zinc-900">
+                        {bookingSuccess.businessName ?? "Salón"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-200 bg-white p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Profesional
+                      </p>
+                      <p className="mt-1 text-base font-semibold text-zinc-900">
+                        {bookingSuccess.employeeName}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-200 bg-white p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Servicio
+                      </p>
+                      <p className="mt-1 text-base font-semibold text-zinc-900">
+                        {bookingSuccess.serviceName}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-200 bg-white p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Fecha y hora
+                      </p>
+                      <p className="mt-1 text-base font-semibold text-zinc-900">
+                        {formatDate(bookingSuccess.date)} · {bookingSuccess.time}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={resetForAnotherBooking}
+                      className="rounded-2xl px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+                      style={{
+                        backgroundColor: accentColor,
+                        color: accentTextColor,
+                      }}
+                    >
+                      Reservar otra cita
+                    </button>
+
+                    <Link
+                      href={slug ? `/reservar/${slug}` : "/reservar"}
+                      className="rounded-2xl border border-emerald-300 bg-white px-5 py-3 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-100"
+                    >
+                      Volver a la portada del salón
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
                 <p className="text-sm text-zinc-500">Día seleccionado</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
@@ -1173,7 +1288,11 @@ export default function PublicEmployeeBookingPage() {
                       <button
                         key={slot}
                         type="button"
-                        onClick={() => setSelectedTime(slot)}
+                        onClick={() => {
+                          setSelectedTime(slot);
+                          setBookingSuccess(null);
+                          setError("");
+                        }}
                         className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${
                           selectedTime === slot
                             ? ""
@@ -1237,12 +1356,6 @@ export default function PublicEmployeeBookingPage() {
                 {error ? (
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
                     {error}
-                  </div>
-                ) : null}
-
-                {success ? (
-                  <div className="rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                    {success}
                   </div>
                 ) : null}
 
