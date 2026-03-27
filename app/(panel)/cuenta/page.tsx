@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+  "https://peluque-guia.vercel.app";
+
 function normalizeText(value: string) {
   return value
     .trim()
@@ -408,6 +412,10 @@ export default async function CuentaPage() {
   const publicBookingMessage = business?.public_booking_message ?? "";
   const publicLogoUrl = sanitizeLogoUrl(business?.public_logo_url);
 
+  const publicBookingUrl = business?.slug
+    ? `${APP_URL}/reservar/${business.slug}`
+    : null;
+
   return (
     <section className="px-6 py-8">
       <div className="mx-auto max-w-6xl space-y-8">
@@ -472,15 +480,28 @@ export default async function CuentaPage() {
               </div>
 
               <div className="rounded-2xl border border-zinc-200 p-4">
-                <p className="text-sm text-zinc-500">Slug público</p>
+                <p className="text-sm text-zinc-500">
+                  Es el identificador de tu web para reservas online
+                </p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  {business?.slug ?? "Sin slug"}
+                  {business?.slug ?? "Sin identificador"}
                 </p>
                 <p className="mt-2 text-sm text-zinc-500">
-                  Enlace base de reserva online:
+                  Enlace base de reserva online
                 </p>
-                <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
-                  {business?.slug ? `/reservar/${business.slug}` : "No disponible"}
+                <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 break-all">
+                  {publicBookingUrl ? (
+                    <a
+                      href={publicBookingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2 hover:text-black"
+                    >
+                      {publicBookingUrl}
+                    </a>
+                  ) : (
+                    "Sin enlace de reserva online"
+                  )}
                 </div>
               </div>
 
