@@ -772,12 +772,23 @@ export default async function CuentaPage() {
                   Guardar personalización Premium
                 </button>
 
-                <Link
-                  href="/reservar"
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Ver reserva pública
-                </Link>
+                {publicBookingUrl ? (
+                  <a
+                    href={publicBookingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                  >
+                    Ver reserva pública
+                  </a>
+                ) : (
+                  <Link
+                    href="/reservar"
+                    className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                  >
+                    Ver reserva pública
+                  </Link>
+                )}
               </div>
             </form>
           </div>

@@ -5,6 +5,10 @@ import LogoutButton from "@/components/LogoutButton";
 import AdvancedDashboardCharts from "@/components/AdvancedDashboardCharts";
 import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+  "https://peluque-guia.vercel.app";
+
 const REVENUE_STATUSES = new Set(["Confirmada", "Completada"]);
 const MADRID_TIME_ZONE = "Europe/Madrid";
 
@@ -481,7 +485,7 @@ export default async function DashboardPage() {
   );
 
   const publicBookingUrl = businessInfo?.slug
-    ? `https://peluque-guia.vercel.app/reservar/${businessInfo.slug}`
+    ? `${APP_URL}/reservar/${businessInfo.slug}`
     : null;
 
   const empleadosActivosCount =
@@ -690,7 +694,7 @@ export default async function DashboardPage() {
             <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
               {businessInfo?.name ?? "Negocio sin nombre"}
             </p>
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-zinc-500 break-all">
               {publicBookingUrl
                 ? `Web de reservas online: ${publicBookingUrl}`
                 : "Sin web de reservas online"}
@@ -1061,17 +1065,33 @@ export default async function DashboardPage() {
               </p>
             </Link>
 
-            <Link
-              href="/reservar"
-              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <p className="text-lg font-semibold text-zinc-900">
-                Reserva pública
-              </p>
-              <p className="mt-2 text-sm text-zinc-500">
-                Abre el flujo de reserva online
-              </p>
-            </Link>
+            {publicBookingUrl ? (
+              <a
+                href={publicBookingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <p className="text-lg font-semibold text-zinc-900">
+                  Reserva pública
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Abre la web real de reservas online
+                </p>
+              </a>
+            ) : (
+              <Link
+                href="/reservar"
+                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <p className="text-lg font-semibold text-zinc-900">
+                  Reserva pública
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Abre el flujo de reserva online
+                </p>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -1409,17 +1429,33 @@ export default async function DashboardPage() {
               </p>
             </Link>
 
-            <Link
-              href="/reservar"
-              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <p className="text-lg font-semibold text-zinc-900">
-                Reserva pública
-              </p>
-              <p className="mt-2 text-sm text-zinc-500">
-                Abre el flujo de reserva online
-              </p>
-            </Link>
+            {publicBookingUrl ? (
+              <a
+                href={publicBookingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <p className="text-lg font-semibold text-zinc-900">
+                  Reserva pública
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Abre la web real de reservas online
+                </p>
+              </a>
+            ) : (
+              <Link
+                href="/reservar"
+                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <p className="text-lg font-semibold text-zinc-900">
+                  Reserva pública
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Abre el flujo de reserva online
+                </p>
+              </Link>
+            )}
           </div>
         </div>
       </div>
