@@ -43,8 +43,38 @@ function normalizeText(value: unknown) {
 }
 
 function normalizeStatus(value: unknown) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
+  return typeof value === "string"
+    ? value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase()
+    : "";
+  }
+
+function isServiceActive(servicio: Record<string, any> | null | undefined) {
+  if (!servicio) return false;
+
+  const status = normalizeStatus(servicio.status);
+
+  if (
+    status === "inactivo" ||
+    status === "desactivado" ||
+    status === "deshabilitado"
+  ) {
+    return false;
+  }
+
+  if ("is_active" in servicio) return Boolean(servicio.is_active);
+  if ("active" in servicio) return Boolean(servicio.active);
+  if ("enabled" in servicio) return Boolean(servicio.enabled);
+  if ("is_disabled" in servicio) return !Boolean(servicio.is_disabled);
+  if ("disabled" in servicio) return !Boolean(servicio.disabled);
+  if ("deleted_at" in servicio) return !servicio.deleted_at;
+
+  return true;
 }
+
 
 function toNumber(value: unknown) {
   const n = Number(value);
@@ -427,16 +457,14 @@ export default async function EditarReservaPage({
       );
     }
 
-    const serviceStatus = normalizeStatus((servicioSeleccionado as any).status);
+const sameServiceAsCurrent = reservaActual.service_id === service_id;
+const selectedServiceIsActive = isServiceActive(servicioSeleccionado as any);
 
-    if (
-      serviceStatus === "desactivado" &&
-      reservaActual.service_id !== service_id
-    ) {
-      redirect(
-        `/reservas/editar/${id}?error=No+puedes+asignar+un+servicio+desactivado`
-      );
-    }
+if (!selectedServiceIsActive && !sameServiceAsCurrent) {
+  redirect(
+    `/reservas/editar/${id}?error=No+puedes+asignar+un+servicio+desactivado`
+  );
+}
 
     if (horarioError) {
       redirect(
@@ -824,8 +852,7 @@ export default async function EditarReservaPage({
               >
                 <option value="">Selecciona un servicio</option>
                 {serviciosOptions.map((servicio) => {
-                  const isDeactivated =
-                    normalizeStatus(servicio.status) === "desactivado";
+                  const isDeactivated = !isServiceActive(servicio as any);
 
                   return (
                     <option key={servicio.id} value={servicio.id}>
