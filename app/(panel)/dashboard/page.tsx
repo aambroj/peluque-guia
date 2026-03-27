@@ -480,6 +480,10 @@ export default async function DashboardPage() {
     subscriptionInfo?.status
   );
 
+  const publicBookingUrl = businessInfo?.slug
+    ? `https://peluque-guia.vercel.app/reservar/${businessInfo.slug}`
+    : null;
+
   const empleadosActivosCount =
     (empleadosDetalle ?? []).filter(
       (empleado: any) =>
@@ -624,10 +628,16 @@ export default async function DashboardPage() {
                 <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
                   {formatSubscriptionStatus(subscriptionInfo?.status)}
                 </span>
-                {businessInfo?.slug ? (
-                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
-                    /reservar/{businessInfo.slug}
-                  </span>
+                {publicBookingUrl ? (
+                  <a
+                    href={publicBookingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85 underline underline-offset-2 hover:bg-white/15"
+                    title={publicBookingUrl}
+                  >
+                    {publicBookingUrl}
+                  </a>
                 ) : null}
               </div>
             </div>
@@ -1059,7 +1069,7 @@ export default async function DashboardPage() {
                 Reserva pública
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                Abrir el flujo de reserva online
+                Abre el flujo de reserva online
               </p>
             </Link>
           </div>
