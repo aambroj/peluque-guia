@@ -128,7 +128,10 @@ function getEmployeeInitials(name: string | null | undefined) {
   if (!safe) return "PR";
 
   const parts = safe.split(/\s+/).filter(Boolean);
-  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+  const initials = parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 
   return initials || "PR";
 }
@@ -141,6 +144,7 @@ export default function PublicBusinessBookingPage() {
   const [empleados, setEmpleados] = useState<EmpleadoPublico[]>([]);
   const [hiddenEmployeesWithoutSchedule, setHiddenEmployeesWithoutSchedule] =
     useState<EmpleadoPublico[]>([]);
+  const [hasPublicServices, setHasPublicServices] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -194,7 +198,7 @@ export default function PublicBusinessBookingPage() {
         const typedBusiness = businessPayload.business;
         setBusiness(typedBusiness);
 
-        const [empleadosRes, schedulesRes] = await Promise.all([
+        const [empleadosRes, schedulesRes, servicesRes] = await Promise.all([
           supabase
             .from("empleados")
             .select(
@@ -210,6 +214,12 @@ export default function PublicBusinessBookingPage() {
               "id, business_id, employee_id, weekday, start_time, end_time, is_working"
             )
             .eq("business_id", typedBusiness.id),
+
+          supabase
+            .from("servicios")
+            .select("id", { count: "exact", head: true })
+            .eq("business_id", typedBusiness.id)
+            .eq("public_visible", true),
         ]);
 
         if (empleadosRes.error) {
@@ -218,6 +228,10 @@ export default function PublicBusinessBookingPage() {
 
         if (schedulesRes.error) {
           throw new Error(schedulesRes.error.message);
+        }
+
+        if (servicesRes.error) {
+          throw new Error(servicesRes.error.message);
         }
 
         const rows = (empleadosRes.data ?? []) as EmpleadoPublico[];
@@ -240,12 +254,16 @@ export default function PublicBusinessBookingPage() {
             !hasValidWorkingSchedule(schedulesByEmployee.get(empleado.id) ?? [])
         );
 
+        const publicServicesAvailable = (servicesRes.count ?? 0) > 0;
+
+        setHasPublicServices(publicServicesAvailable);
         setEmpleados(visibles);
         setHiddenEmployeesWithoutSchedule(ocultosSinHorario);
       } catch (err) {
         setBusiness(null);
         setEmpleados([]);
         setHiddenEmployeesWithoutSchedule([]);
+        setHasPublicServices(false);
         setError(
           err instanceof Error
             ? err.message
@@ -288,7 +306,8 @@ export default function PublicBusinessBookingPage() {
         <section className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
           <div className="grid gap-8 p-8 lg:grid-cols-[1.3fr_0.7fr] lg:p-10">
             <div>
-              <div className="inline-flex rounded-full border px-3 py-1 text-xs font-medium"
+              <div
+                className="inline-flex rounded-full border px-3 py-1 text-xs font-medium"
                 style={{
                   color: accentColor,
                   borderColor: hexToRgba(accentColor, 0.2),
@@ -426,6 +445,21 @@ export default function PublicBusinessBookingPage() {
           </section>
         ) : (
           <>
+            {!hasPublicServices ? (
+              <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-amber-900">
+                  Este salón todavía no tiene servicios disponibles para reserva
+                  online
+                </h2>
+                <p className="mt-2 text-sm text-amber-800">
+                  Ahora mismo los clientes no pueden continuar al calendario
+                  porque todavía no hay servicios públicos activos para reservar.
+                  Cuando el salón active al menos un servicio online, los
+                  botones de reserva se habilitarán automáticamente.
+                </p>
+              </section>
+            ) : null}
+
             {hiddenEmployeesWithoutSchedule.length > 0 ? (
               <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 shadow-sm">
                 Hay {hiddenEmployeesWithoutSchedule.length} profesional
@@ -453,7 +487,9 @@ export default function PublicBusinessBookingPage() {
                 </div>
 
                 <p className="text-sm text-zinc-500">
-                  Elige con quién quieres tu próxima cita.
+                  {hasPublicServices
+                    ? "Elige con quién quieres tu próxima cita."
+                    : "Primero el salón debe activar al menos un servicio público."}
                 </p>
               </div>
 
@@ -522,16 +558,26 @@ export default function PublicBusinessBookingPage() {
                       </div>
 
                       <div className="mt-6">
-                        <Link
-                          href={`/reservar/${slug}/${empleado.id}`}
-                          className="inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition hover:opacity-90"
-                          style={{
-                            backgroundColor: accentColor,
-                            color: accentTextColor,
-                          }}
-                        >
-                          Ver calendario y reservar
-                        </Link>
+                        {hasPublicServices ? (
+                          <Link
+                            href={`/reservar/${slug}/${empleado.id}`}
+                            className="inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition hover:opacity-90"
+                            style={{
+                              backgroundColor: accentColor,
+                              color: accentTextColor,
+                            }}
+                          >
+                            Ver calendario y reservar
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-400"
+                          >
+                            Reserva no disponible todavía
+                          </button>
+                        )}
                       </div>
                     </article>
                   ))}
