@@ -655,9 +655,7 @@ export default async function EditarReservaPage({
 
     supabaseAdmin
       .from("servicios")
-      .select(
-        "id, name, status, is_active, active, enabled, is_disabled, disabled, deleted_at"
-      )
+      .select("*")
       .eq("business_id", businessId)
       .order("name", { ascending: true }),
   ]);
