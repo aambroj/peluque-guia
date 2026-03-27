@@ -509,8 +509,8 @@ export default async function CuentaPage() {
                   <div className="mt-4">
                     <CopyBookingUrlButton
                       value={publicBookingUrl}
-                      defaultLabel="Copiar enlace de tu web de reservas publicas"
-                      copiedLabel="Enlace de reservas copiado"
+                      defaultLabel="Copiar enlace de tu web de reserva online"
+                      copiedLabel="Enlace de reserva online copiado"
                       className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
                     />
                   </div>
@@ -797,8 +797,8 @@ export default async function CuentaPage() {
 
                     <CopyBookingUrlButton
                       value={publicBookingUrl}
-                      defaultLabel="Copiar enlace de tu web de reservas publicas"
-                      copiedLabel="Enlace de reservas copiado"
+                      defaultLabel="Copiar enlace de tu web de reserva online"
+                      copiedLabel="Enlace de reserva online copiado"
                       className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
                     />
                   </>
