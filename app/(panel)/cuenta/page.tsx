@@ -142,9 +142,9 @@ function getSubscriptionNotice(params: {
   if (normalizedPlan === "basic" && normalizedStatus === "inactive") {
     return {
       tone: "amber" as const,
-      title: "Tu prueba gratis aún no está activada",
+      title: "Tu prueba gratuita todavía no está activada",
       description:
-        "Has creado el negocio, pero todavía no has iniciado la prueba de 30 días. Activa Basic desde Planes para empezar.",
+        "Has creado el negocio, pero aún no has activado el plan Basic. Inicia la prueba de 30 días desde la pantalla de planes.",
     };
   }
 
@@ -173,7 +173,7 @@ function getSubscriptionNotice(params: {
       tone: "amber" as const,
       title: "Hay un problema con el cobro",
       description:
-        "Revisa tu facturación o el método de pago para evitar interrupciones en la suscripción.",
+        "Revisa la facturación o el método de pago para evitar interrupciones en la suscripción.",
     };
   }
 
@@ -182,7 +182,7 @@ function getSubscriptionNotice(params: {
       tone: "rose" as const,
       title: "La suscripción está cancelada",
       description:
-        "Puedes volver a activar un plan desde la pantalla de Planes.",
+        "Puedes volver a activar un plan en cualquier momento desde la pantalla de planes.",
     };
   }
 
@@ -197,9 +197,9 @@ function getSubscriptionNotice(params: {
 
   return {
     tone: "zinc" as const,
-    title: "Estado de suscripción",
+    title: "Estado de la suscripción",
     description:
-      "Consulta aquí el plan actual, su estado y las acciones disponibles.",
+      "Consulta aquí tu plan actual, el estado de la cuenta y las acciones disponibles.",
   };
 }
 
@@ -235,7 +235,7 @@ function getPrimaryAction(params: {
   if (normalizedPlan === "basic" && normalizedStatus === "inactive") {
     return {
       href: "/cuenta/planes",
-      label: "Activar prueba gratis",
+      label: "Activar prueba gratuita",
     };
   }
 
@@ -284,6 +284,17 @@ function sanitizeLogoUrl(value: string | null | undefined) {
   }
 
   return "";
+}
+
+function getReadableRole(role: string | null | undefined) {
+  const normalized = normalizeText(role ?? "");
+
+  if (!normalized) return "Owner";
+  if (normalized === "owner") return "Owner";
+  if (normalized === "admin") return "Admin";
+  if (normalized === "manager") return "Manager";
+
+  return role ?? "Owner";
 }
 
 export default async function CuentaPage() {
@@ -347,8 +358,18 @@ export default async function CuentaPage() {
       })
       .eq("id", businessId);
 
+    const { data: refreshedBusiness } = await supabaseAdmin
+      .from("businesses")
+      .select("slug")
+      .eq("id", businessId)
+      .maybeSingle();
+
     revalidatePath("/cuenta");
     revalidatePath("/reservar");
+
+    if (refreshedBusiness?.slug) {
+      revalidatePath(`/reservar/${refreshedBusiness.slug}`);
+    }
   }
 
   const [
@@ -418,6 +439,8 @@ export default async function CuentaPage() {
     ? `${APP_URL}/reservar/${business.slug}`
     : null;
 
+  const roleLabel = getReadableRole(profile?.role);
+
   return (
     <section className="px-6 py-8">
       <div className="mx-auto max-w-6xl space-y-8">
@@ -425,7 +448,7 @@ export default async function CuentaPage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600">
-                Configuración SaaS
+                Cuenta del negocio
               </div>
 
               <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
@@ -433,8 +456,8 @@ export default async function CuentaPage() {
               </h2>
 
               <p className="mt-2 text-zinc-600">
-                Consulta los datos principales del negocio, el plan actual y el
-                estado real de la suscripción.
+                Gestiona los datos principales del negocio, el enlace público de
+                reservas y el estado real de tu suscripción.
               </p>
             </div>
 
@@ -442,7 +465,7 @@ export default async function CuentaPage() {
               href="/dashboard"
               className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
             >
-              Volver al dashboard
+              Volver al panel
             </Link>
           </div>
         </div>
@@ -467,16 +490,61 @@ export default async function CuentaPage() {
           <p className="mt-2 text-sm">{notice.description}</p>
         </div>
 
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-500">Negocio</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {business?.name ?? "Sin nombre"}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              {business?.email ?? user.email ?? "Sin email"}
+            </p>
+          </div>
+
+          <div
+            className={`rounded-3xl border p-6 shadow-sm ${getPlanCardClasses(
+              subscription?.plan
+            )}`}
+          >
+            <p className="text-sm text-zinc-500">Plan actual</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {planLabel}
+            </p>
+            <div className="mt-3">
+              <span
+                className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getStatusClasses(
+                  {
+                    plan: subscription?.plan,
+                    status: subscription?.status,
+                  }
+                )}`}
+              >
+                {statusLabel}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-500">Capacidad incluida</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {employeeLimit} empleados
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Límite aplicado al crear o reactivar miembros del equipo.
+            </p>
+          </div>
+        </div>
+
         {publicBookingUrl ? (
           <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="max-w-3xl">
                 <h3 className="text-xl font-semibold text-emerald-900">
-                  Comparte tu web de reservas con tus clientes
+                  Comparte tu página pública de reservas
                 </h3>
                 <p className="mt-2 text-sm text-emerald-800">
-                  Este es tu enlace público real para que tus clientes puedan reservar
-                  online directamente en tu peluquería.
+                  Este es el enlace real que puedes enviar a tus clientes para
+                  que reserven online directamente en tu peluquería.
                 </p>
 
                 <a
@@ -492,8 +560,8 @@ export default async function CuentaPage() {
               <div className="flex flex-wrap gap-3">
                 <CopyBookingUrlButton
                   value={publicBookingUrl}
-                  defaultLabel="Copiar enlace de tu web de reservas públicas"
-                  copiedLabel="Enlace de reservas copiado"
+                  defaultLabel="Copiar enlace de reservas"
+                  copiedLabel="Enlace copiado"
                   className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
                 />
 
@@ -503,7 +571,7 @@ export default async function CuentaPage() {
                   rel="noreferrer"
                   className="rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-medium text-emerald-900 transition hover:bg-emerald-100"
                 >
-                  Abrir web pública
+                  Abrir página pública
                 </a>
               </div>
             </div>
@@ -511,11 +579,11 @@ export default async function CuentaPage() {
         ) : (
           <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
             <h3 className="text-xl font-semibold text-amber-900">
-              Aún no tienes activa tu web de reservas
+              Todavía no tienes una página pública lista para compartir
             </h3>
             <p className="mt-2 text-sm text-amber-800">
-              Cuando tu negocio tenga identificador público, aquí podrás copiar y
-              compartir el enlace de reservas online con tus clientes.
+              Cuando tu negocio tenga identificador público, aquí podrás copiar
+              y compartir el enlace real de reservas online con tus clientes.
             </p>
           </div>
         )}
@@ -538,15 +606,15 @@ export default async function CuentaPage() {
 
               <div className="rounded-2xl border border-zinc-200 p-4">
                 <p className="text-sm text-zinc-500">
-                  Es el identificador de tu web para reservas online
+                  Identificador público de reservas
                 </p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
                   {business?.slug ?? "Sin identificador"}
                 </p>
                 <p className="mt-2 text-sm text-zinc-500">
-                  Enlace base de reserva online
+                  Enlace público de reserva online
                 </p>
-                <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 break-all">
+                <div className="mt-2 break-all rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
                   {publicBookingUrl ? (
                     <a
                       href={publicBookingUrl}
@@ -565,8 +633,8 @@ export default async function CuentaPage() {
                   <div className="mt-4">
                     <CopyBookingUrlButton
                       value={publicBookingUrl}
-                      defaultLabel="Copiar enlace de tu web de reserva online"
-                      copiedLabel="Enlace de reserva online copiado"
+                      defaultLabel="Copiar enlace de reserva online"
+                      copiedLabel="Enlace copiado"
                       className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
                     />
                   </div>
@@ -627,9 +695,7 @@ export default async function CuentaPage() {
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
                   {profile?.full_name || user.email || "Usuario"}
                 </p>
-                <p className="mt-2 text-sm text-zinc-500">
-                  Rol: {profile?.role ?? "owner"}
-                </p>
+                <p className="mt-2 text-sm text-zinc-500">Rol: {roleLabel}</p>
               </div>
             </div>
           </div>
@@ -643,7 +709,7 @@ export default async function CuentaPage() {
               </h3>
               <p className="mt-1 text-sm text-zinc-500">
                 Gestiona la activación del plan, la facturación y la evolución
-                de tu suscripción.
+                de tu cuenta.
               </p>
             </div>
 
@@ -681,7 +747,7 @@ export default async function CuentaPage() {
 
           {showCustomerPortalActions ? (
             <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-              El cambio de tarjeta, facturas, cambios de plan y cancelación se
+              Cambios de tarjeta, facturas, cambios de plan y cancelación se
               gestionan de forma segura desde Stripe.
             </div>
           ) : null}
@@ -702,9 +768,7 @@ export default async function CuentaPage() {
               <p className="mt-2 text-lg font-semibold text-zinc-900">
                 {statusLabel}
               </p>
-              <p className="mt-2 text-sm text-zinc-500">
-                {notice.description}
-              </p>
+              <p className="mt-2 text-sm text-zinc-500">{notice.description}</p>
             </div>
 
             <div className="rounded-2xl border border-zinc-200 p-4">
@@ -715,8 +779,7 @@ export default async function CuentaPage() {
                 {employeeLimit} empleados activos
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                El límite de empleados se aplica al crear o reactivar miembros
-                del equipo.
+                El límite se aplica al crear o reactivar miembros del equipo.
               </p>
             </div>
           </div>
@@ -770,7 +833,7 @@ export default async function CuentaPage() {
                     placeholder="https://tu-dominio.com/logo.png"
                   />
                   <p className="mt-2 text-xs text-violet-800">
-                    Usa una URL completa pública de imagen (https://...).
+                    Usa una URL pública completa de imagen.
                   </p>
                 </div>
               </div>
@@ -792,7 +855,7 @@ export default async function CuentaPage() {
                   placeholder="Ej. Reserva tu cita online y te confirmaremos cualquier detalle si fuera necesario."
                 />
                 <p className="mt-2 text-xs text-violet-800">
-                  Este texto podrá mostrarse en la página pública de reserva.
+                  Este texto puede mostrarse en la página pública de reserva.
                 </p>
               </div>
 
@@ -853,8 +916,8 @@ export default async function CuentaPage() {
 
                     <CopyBookingUrlButton
                       value={publicBookingUrl}
-                      defaultLabel="Copiar enlace de tu web de reserva online"
-                      copiedLabel="Enlace de reserva online copiado"
+                      defaultLabel="Copiar enlace de reserva online"
+                      copiedLabel="Enlace copiado"
                       className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
                     />
                   </>
@@ -876,7 +939,7 @@ export default async function CuentaPage() {
             </h3>
             <p className="mt-2 text-sm text-violet-800">
               En Premium podrás personalizar la reserva pública con color de
-              marca, mensaje del negocio y logo público para dar una experiencia
+              marca, mensaje del negocio y logo público para ofrecer una imagen
               más cuidada.
             </p>
             <div className="mt-4">
