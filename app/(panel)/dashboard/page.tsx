@@ -672,6 +672,8 @@ export default async function DashboardPage() {
               {publicBookingUrl ? (
                 <CopyBookingUrlButton
                   value={publicBookingUrl}
+                  defaultLabel="Copiar enlace de tu web de reservas publicas"
+                  copiedLabel="Enlace de reservas copiado"
                   className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-sm font-semibold text-white transition hover:bg-white/15"
                 />
               ) : (
@@ -721,6 +723,8 @@ export default async function DashboardPage() {
                 <div className="mt-4">
                   <CopyBookingUrlButton
                     value={publicBookingUrl}
+                    defaultLabel="Copiar enlace de tu web de reservas publicas"
+                    copiedLabel="Enlace de reservas copiado"
                     className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
                   />
                 </div>
