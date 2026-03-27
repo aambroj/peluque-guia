@@ -29,6 +29,7 @@ export default function RegistroPage() {
   const [loading, setLoading] = useState(false);
 
   const suggestedSlug = useMemo(() => slugify(businessName), [businessName]);
+  const finalPreviewSlug = slugify(slug || suggestedSlug);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,22 +94,22 @@ export default function RegistroPage() {
 
   return (
     <section className="min-h-screen bg-zinc-50">
-      <div className="mx-auto grid min-h-screen max-w-7xl items-stretch px-6 py-8 lg:grid-cols-[1.1fr_560px] lg:gap-8 lg:px-8">
+      <div className="mx-auto grid min-h-screen max-w-7xl items-stretch px-6 py-8 lg:grid-cols-[1.12fr_540px] lg:gap-8 lg:px-8">
         <div className="hidden lg:flex">
           <div className="flex w-full flex-col justify-between rounded-[2rem] bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-10 text-white shadow-sm">
             <div>
-              <div className="inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/80">
-                Alta de nuevo negocio
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/80">
+                Peluque-Guía · Alta de nuevo negocio
               </div>
 
-              <h1 className="mt-6 text-5xl font-bold tracking-tight leading-tight">
+              <h1 className="mt-6 text-5xl font-bold leading-tight tracking-tight">
                 Crea tu salón y empieza a gestionarlo desde un solo panel.
               </h1>
 
-              <p className="mt-5 max-w-xl text-base leading-7 text-zinc-300">
-                Registra tu peluquería, crea tu acceso privado y pon en marcha
-                clientes, empleados, servicios, reservas y disponibilidad online
-                con una imagen moderna y profesional.
+              <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-300">
+                Registra tu peluquería, crea tu acceso privado y organiza
+                reservas, clientes, equipo, servicios y disponibilidad online con
+                una imagen más profesional y moderna.
               </p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -126,7 +127,7 @@ export default function RegistroPage() {
                     Enlace público propio
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Define el identificador de tu salón para futuras reservas
+                    Define el identificador de tu salón para las reservas
                     online.
                   </p>
                 </div>
@@ -136,44 +137,53 @@ export default function RegistroPage() {
                     Gestión diaria
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Organiza agenda, equipo, catálogo de servicios y clientes.
+                    Organiza agenda, empleados, catálogo de servicios y
+                    clientes desde un solo lugar.
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
                   <p className="text-sm font-semibold text-white">
-                    Pensado para SaaS
+                    Base preparada para crecer
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Estructura preparada para planes, crecimiento y uso real por
-                    peluquerías.
+                    Estructura lista para suscripciones, multi-negocio y uso real
+                    por peluquerías.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6">
-              <p className="text-sm font-semibold text-white">
-                Soporte y contacto
-              </p>
-              <p className="mt-2 text-sm leading-6 text-zinc-300">
-                Para incidencias, errores o sugerencias sobre la aplicación:
-              </p>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                <p className="text-sm font-semibold text-white">
+                  Pensado para negocio real
+                </p>
+                <p className="mt-2 text-sm leading-6 text-zinc-300">
+                  Menos tiempo organizando tareas y más tiempo atendiendo mejor
+                  a tus clientes.
+                </p>
+              </div>
 
-              <div className="mt-4 space-y-1 text-sm">
-                <p className="font-medium text-white">Alberto Ambroj López</p>
-                <a
-                  href="mailto:alber.ambroj@gmail.com"
-                  className="block text-zinc-300 underline underline-offset-2 hover:text-white"
-                >
-                  alber.ambroj@gmail.com
-                </a>
-                <a
-                  href="mailto:aambroj@yahoo.es"
-                  className="block text-zinc-300 underline underline-offset-2 hover:text-white"
-                >
-                  aambroj@yahoo.es
-                </a>
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                <p className="text-sm font-semibold text-white">
+                  Soporte y contacto
+                </p>
+                <div className="mt-3 space-y-1 text-sm">
+                  <p className="font-medium text-white">Alberto Ambroj López</p>
+                  <a
+                    href="mailto:alber.ambroj@gmail.com"
+                    className="block text-zinc-300 underline underline-offset-2 hover:text-white"
+                  >
+                    alber.ambroj@gmail.com
+                  </a>
+                  <a
+                    href="mailto:aambroj@yahoo.es"
+                    className="block text-zinc-300 underline underline-offset-2 hover:text-white"
+                  >
+                    aambroj@yahoo.es
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -206,6 +216,7 @@ export default function RegistroPage() {
                     }
                   }}
                   required
+                  autoComplete="organization"
                   className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
                   placeholder="Peluquería Lola"
                 />
@@ -213,21 +224,36 @@ export default function RegistroPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-zinc-700">
-                   Identificador del salón: es el nombre que tendrán que poner tus clientes al
-                   reservar online. Por ejemplo, si eliges <span className="font-semibold">pepe</span>,
-                   tus clientes tendrán que acceder a{" "}
-                    <span className="font-semibold">
-                      https://peluque-guia.vercel.app/reservar/pepe
-                    </span>
+                  Identificador del salón
                 </label>
-                  <input
-                     type="text"
-                     value={slug}
-                      onChange={(event) => setSlug(slugify(event.target.value))}
-                      required
-                      className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
-                       placeholder="peluqueria-lola"
-                      />
+                <input
+                  type="text"
+                  value={slug}
+                  onChange={(event) => setSlug(slugify(event.target.value))}
+                  required
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                  placeholder="peluqueria-lola"
+                />
+
+                <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm font-medium text-zinc-900">
+                    Este identificador será el nombre público de tu salón para la
+                    reserva online.
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    Por ejemplo, si eliges{" "}
+                    <span className="font-semibold text-zinc-900">
+                      {finalPreviewSlug || "peluqueria-lola"}
+                    </span>
+                    , tus clientes accederán a:
+                  </p>
+                  <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 text-sm text-zinc-800 border border-zinc-200">
+                    https://peluque-guia.vercel.app/reservar/
+                    <span className="font-semibold">
+                      {finalPreviewSlug || "peluqueria-lola"}
+                    </span>
+                  </p>
+                </div>
               </div>
 
               <div>
@@ -239,6 +265,7 @@ export default function RegistroPage() {
                   value={ownerName}
                   onChange={(event) => setOwnerName(event.target.value)}
                   required
+                  autoComplete="name"
                   className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
                   placeholder="Ana García"
                 />
@@ -253,6 +280,7 @@ export default function RegistroPage() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   required
+                  autoComplete="email"
                   className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
                   placeholder="admin@tusalon.com"
                 />
@@ -268,6 +296,7 @@ export default function RegistroPage() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     required
+                    autoComplete="new-password"
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
                     placeholder="••••••••"
                   />
@@ -282,6 +311,7 @@ export default function RegistroPage() {
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     required
+                    autoComplete="new-password"
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
                     placeholder="••••••••"
                   />
@@ -325,15 +355,22 @@ export default function RegistroPage() {
                 </div>
               </div>
 
-              <p className="text-center text-sm text-zinc-600">
-                ¿Ya tienes cuenta?{" "}
-                <Link
-                  href="/login"
-                  className="font-medium text-black underline underline-offset-2"
-                >
-                  Entrar
-                </Link>
-              </p>
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <p className="text-sm font-medium text-zinc-900">
+                  ¿Ya tienes cuenta?
+                </p>
+                <p className="mt-1 text-sm text-zinc-600">
+                  Entra con tu acceso actual al panel.
+                </p>
+                <div className="mt-3">
+                  <Link
+                    href="/login"
+                    className="text-sm font-medium text-black underline underline-offset-2"
+                  >
+                    Entrar
+                  </Link>
+                </div>
+              </div>
             </form>
           </div>
         </div>
