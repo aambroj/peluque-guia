@@ -363,6 +363,17 @@ function getEmployeeInitials(name: string | null | undefined) {
   return initials || "PR";
 }
 
+async function safeJson<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 export default function PublicEmployeeBookingPage() {
   const params = useParams<{ slug: string; employeeId: string }>();
 
@@ -389,7 +400,10 @@ export default function PublicEmployeeBookingPage() {
   const [loadingMonth, setLoadingMonth] = useState(false);
   const [loadingDay, setLoadingDay] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+
+  const [pageError, setPageError] = useState("");
+  const [formError, setFormError] = useState("");
+
   const [bookingSuccess, setBookingSuccess] = useState<BookingSuccess | null>(
     null
   );
@@ -422,30 +436,35 @@ export default function PublicEmployeeBookingPage() {
   useEffect(() => {
     const loadBase = async () => {
       setLoadingBase(true);
-      setError("");
+      setPageError("");
+      setFormError("");
 
       try {
         if (!slug) {
-          throw new Error("Negocio público no válido.");
+          throw new Error("Salón público no válido.");
         }
 
         if (!Number.isFinite(employeeId) || employeeId <= 0) {
-          throw new Error("Empleado inválido.");
+          throw new Error("Profesional no válido.");
         }
 
         const businessResponse = await fetch(
           `/api/public-business?slug=${encodeURIComponent(slug)}`
         );
 
-        const businessPayload:
-          | PublicBusinessResponse
-          | {
-              error?: string;
-            } = await businessResponse.json();
+        const businessPayload = await safeJson<
+          PublicBusinessResponse | { error?: string }
+        >(businessResponse);
 
-        if (!businessResponse.ok || !("business" in businessPayload)) {
+        if (
+          !businessResponse.ok ||
+          !businessPayload ||
+          !("business" in businessPayload)
+        ) {
           throw new Error(
-            ("error" in businessPayload && businessPayload.error) ||
+            (businessPayload &&
+              "error" in businessPayload &&
+              businessPayload.error) ||
               "No se encontró el salón solicitado."
           );
         }
@@ -493,14 +512,16 @@ export default function PublicEmployeeBookingPage() {
         const loadedEmployee = employeeRes.data as Empleado | null;
 
         if (!loadedEmployee || !isEmployeePublicBookable(loadedEmployee)) {
-          throw new Error("Empleado no disponible para reservas públicas.");
+          throw new Error(
+            "Este profesional no está disponible para reserva online."
+          );
         }
 
         const loadedSchedules = (schedulesRes.data ?? []) as ScheduleRow[];
 
         if (!hasValidWorkingSchedule(loadedSchedules)) {
           throw new Error(
-            "Este profesional aún no está disponible para reserva online porque no tiene horario configurado."
+            "Este profesional todavía no tiene horarios disponibles para reserva online."
           );
         }
 
@@ -510,7 +531,7 @@ export default function PublicEmployeeBookingPage() {
 
         if (loadedServices.length === 0) {
           throw new Error(
-            "No hay servicios activos disponibles para reserva online en este salón."
+            "Ahora mismo no hay servicios disponibles para reservar online."
           );
         }
 
@@ -523,7 +544,7 @@ export default function PublicEmployeeBookingPage() {
         setEmployee(null);
         setServices([]);
         setServiceId("");
-        setError(
+        setPageError(
           err instanceof Error ? err.message : "Error cargando datos públicos."
         );
       } finally {
@@ -546,7 +567,7 @@ export default function PublicEmployeeBookingPage() {
       setServiceId(String(services[0].id));
       setSelectedTime("");
       setBookingSuccess(null);
-      setError("");
+      setFormError("");
     }
   }, [services, serviceId]);
 
@@ -562,7 +583,7 @@ export default function PublicEmployeeBookingPage() {
       }
 
       setLoadingMonth(true);
-      setError("");
+      setFormError("");
 
       try {
         const response = await fetch(
@@ -574,11 +595,14 @@ export default function PublicEmployeeBookingPage() {
           })
         );
 
-        const data: MonthAvailabilityResponse | { error: string } =
-          await response.json();
+        const data = await safeJson<MonthAvailabilityResponse | { error: string }>(
+          response
+        );
 
-        if (!response.ok) {
-          throw new Error("error" in data ? data.error : "Error cargando mes.");
+        if (!response.ok || !data) {
+          throw new Error(
+            data && "error" in data ? data.error : "No se pudo cargar el mes."
+          );
         }
 
         const result = data as MonthAvailabilityResponse;
@@ -595,10 +619,10 @@ export default function PublicEmployeeBookingPage() {
         }
       } catch (err) {
         setMonthDays([]);
-        setError(
+        setFormError(
           err instanceof Error
             ? err.message
-            : "Error cargando disponibilidad mensual."
+            : "No se pudo cargar la disponibilidad mensual."
         );
 
         if (month === getTodayMonth()) {
@@ -641,7 +665,7 @@ export default function PublicEmployeeBookingPage() {
       }
 
       setLoadingDay(true);
-      setError("");
+      setFormError("");
 
       try {
         const response = await fetch(
@@ -653,11 +677,14 @@ export default function PublicEmployeeBookingPage() {
           })
         );
 
-        const data: DayAvailabilityResponse | { error: string } =
-          await response.json();
+        const data = await safeJson<DayAvailabilityResponse | { error: string }>(
+          response
+        );
 
-        if (!response.ok) {
-          throw new Error("error" in data ? data.error : "Error cargando día.");
+        if (!response.ok || !data) {
+          throw new Error(
+            data && "error" in data ? data.error : "No se pudo cargar ese día."
+          );
         }
 
         const result = data as DayAvailabilityResponse;
@@ -678,10 +705,10 @@ export default function PublicEmployeeBookingPage() {
         setDaySlots([]);
         setDaySummary(null);
         setSelectedTime("");
-        setError(
+        setFormError(
           err instanceof Error
             ? err.message
-            : "Error cargando disponibilidad diaria."
+            : "No se pudo cargar la disponibilidad diaria."
         );
       } finally {
         setLoadingDay(false);
@@ -705,7 +732,7 @@ export default function PublicEmployeeBookingPage() {
 
   const resetForAnotherBooking = () => {
     setBookingSuccess(null);
-    setError("");
+    setFormError("");
     setSelectedTime("");
     setNotes("");
   };
@@ -713,12 +740,16 @@ export default function PublicEmployeeBookingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setError("");
+    setFormError("");
     setBookingSuccess(null);
 
     try {
+      const trimmedClientName = clientName.trim();
+      const trimmedPhone = phone.trim();
+      const trimmedNotes = notes.trim();
+
       if (!slug) {
-        throw new Error("Negocio público no válido.");
+        throw new Error("Salón público no válido.");
       }
 
       if (!serviceId) {
@@ -737,11 +768,11 @@ export default function PublicEmployeeBookingPage() {
         throw new Error("Selecciona una hora.");
       }
 
-      if (!clientName.trim()) {
+      if (!trimmedClientName) {
         throw new Error("Introduce tu nombre.");
       }
 
-      if (!phone.trim()) {
+      if (!trimmedPhone) {
         throw new Error("Introduce tu teléfono.");
       }
 
@@ -756,32 +787,20 @@ export default function PublicEmployeeBookingPage() {
           serviceId: Number(serviceId),
           date: selectedDate,
           startTime: selectedTime,
-          clientName,
-          phone,
-          notes,
+          clientName: trimmedClientName,
+          phone: trimmedPhone,
+          notes: trimmedNotes,
         }),
       });
 
-      const rawText = await response.text();
-
-      let data: any = null;
-
-      if (rawText) {
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          throw new Error(
-            `La API devolvió una respuesta no válida: ${rawText.slice(0, 200)}`
-          );
-        }
-      }
+      const data = await safeJson<any>(response);
 
       if (!response.ok) {
-        throw new Error(data?.error || "No se pudo crear la reserva.");
+        throw new Error(data?.error || "No se pudo completar la reserva.");
       }
 
       if (!data?.booking) {
-        throw new Error("La API no devolvió los datos de la reserva creada.");
+        throw new Error("No se pudo obtener el resumen de la reserva creada.");
       }
 
       setBookingSuccess({
@@ -806,10 +825,9 @@ export default function PublicEmployeeBookingPage() {
         })
       );
 
-      const refreshDayText = await refreshDay.text();
-      const refreshDayData: DayAvailabilityResponse = JSON.parse(refreshDayText);
+      const refreshDayData = await safeJson<DayAvailabilityResponse>(refreshDay);
 
-      if (refreshDay.ok) {
+      if (refreshDay.ok && refreshDayData) {
         setDaySlots(refreshDayData.availableSlots);
         setDaySummary({
           date: refreshDayData.date,
@@ -829,15 +847,15 @@ export default function PublicEmployeeBookingPage() {
         })
       );
 
-      const refreshMonthText = await refreshMonth.text();
-      const refreshMonthData: MonthAvailabilityResponse =
-        JSON.parse(refreshMonthText);
+      const refreshMonthData = await safeJson<MonthAvailabilityResponse>(
+        refreshMonth
+      );
 
-      if (refreshMonth.ok) {
+      if (refreshMonth.ok && refreshMonthData) {
         setMonthDays(refreshMonthData.days);
       }
     } catch (err) {
-      setError(
+      setFormError(
         err instanceof Error ? err.message : "Error al crear la reserva."
       );
     } finally {
@@ -849,13 +867,13 @@ export default function PublicEmployeeBookingPage() {
     return (
       <main className="min-h-screen bg-zinc-50 px-6 py-10">
         <div className="mx-auto max-w-6xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          Cargando formulario público...
+          Cargando formulario de reserva...
         </div>
       </main>
     );
   }
 
-  if (error && !employee) {
+  if (pageError && !employee) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 md:px-6 md:py-10">
         <div className="mx-auto max-w-4xl space-y-6">
@@ -863,11 +881,11 @@ export default function PublicEmployeeBookingPage() {
             href={slug ? `/reservar/${slug}` : "/reservar"}
             className="inline-flex rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
           >
-            ← Volver a profesionales
+            ← Volver al salón
           </Link>
 
-          <section className="rounded-3xl border border-red-200 bg-red-50 p-8 shadow-sm text-red-700">
-            {error}
+          <section className="rounded-3xl border border-red-200 bg-red-50 p-8 text-red-700 shadow-sm">
+            {pageError}
           </section>
         </div>
       </main>
@@ -890,14 +908,8 @@ export default function PublicEmployeeBookingPage() {
             href={slug ? `/reservar/${slug}` : "/reservar"}
             className="inline-flex rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
           >
-            ← Volver a profesionales
+            ← Volver al salón
           </Link>
-
-          {business?.slug ? (
-            <span className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500">
-              /reservar/{business.slug}/{employeeId}
-            </span>
-          ) : null}
         </div>
 
         <section className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
@@ -920,8 +932,8 @@ export default function PublicEmployeeBookingPage() {
 
               <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600">
                 {business?.name ? `${business.name}. ` : ""}
-                Elige servicio, selecciona día y hora libre, y completa tus datos
-                para dejar la reserva confirmada.
+                Elige el servicio, selecciona el día y la hora que prefieras y
+                completa tus datos para pedir tu cita.
               </p>
 
               {publicBookingMessage ? (
@@ -939,10 +951,10 @@ export default function PublicEmployeeBookingPage() {
 
               <div className="mt-8 flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
-                  Calendario visible
+                  Elige servicio
                 </span>
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
-                  Horas libres reales
+                  Horarios disponibles
                 </span>
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
                   Reserva online directa
@@ -965,7 +977,11 @@ export default function PublicEmployeeBookingPage() {
                   <div className="mb-5">
                     <img
                       src={publicLogoUrl}
-                      alt={business?.name ? `Logo de ${business.name}` : "Logo del salón"}
+                      alt={
+                        business?.name
+                          ? `Logo de ${business.name}`
+                          : "Logo del salón"
+                      }
                       className="h-20 w-auto rounded-2xl border border-zinc-200 bg-white p-2 object-contain"
                     />
                   </div>
@@ -998,22 +1014,26 @@ export default function PublicEmployeeBookingPage() {
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
-                  <p className="text-sm font-semibold text-zinc-900">Mes actual</p>
-                  <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 capitalize">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Mes actual
+                  </p>
+                  <p className="mt-2 text-2xl font-bold capitalize tracking-tight text-zinc-900">
                     {formatMonthLabel(month)}
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">
-                    Navega entre meses y elige el mejor día.
+                    Puedes cambiar de mes cuando quieras.
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
-                  <p className="text-sm font-semibold text-zinc-900">Día elegido</p>
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Día elegido
+                  </p>
                   <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
                     {selectedDate ? formatDate(selectedDate) : "--/--/----"}
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">
-                    Después solo tendrás que escoger una hora libre.
+                    Después solo tendrás que escoger una hora disponible.
                   </p>
                 </div>
               </div>
@@ -1034,7 +1054,7 @@ export default function PublicEmployeeBookingPage() {
                     setServiceId(e.target.value);
                     setSelectedTime("");
                     setBookingSuccess(null);
-                    setError("");
+                    setFormError("");
                   }}
                   className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none transition focus:border-black"
                 >
@@ -1059,7 +1079,7 @@ export default function PublicEmployeeBookingPage() {
                       setMonth(getPreviousMonth(month));
                       setSelectedTime("");
                       setBookingSuccess(null);
-                      setError("");
+                      setFormError("");
                     }}
                     className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -1076,7 +1096,7 @@ export default function PublicEmployeeBookingPage() {
                       setMonth(getNextMonth(month));
                       setSelectedTime("");
                       setBookingSuccess(null);
-                      setError("");
+                      setFormError("");
                     }}
                     className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black"
                   >
@@ -1093,7 +1113,8 @@ export default function PublicEmployeeBookingPage() {
                     Calendario de disponibilidad
                   </h2>
                   <p className="mt-1 text-sm text-zinc-500">
-                    Verde = libre, amarillo = semilibre, rojo = ocupado o no disponible.
+                    Verde = más disponibilidad, amarillo = disponibilidad media,
+                    rojo = no disponible o casi completo.
                   </p>
                 </div>
 
@@ -1132,7 +1153,7 @@ export default function PublicEmployeeBookingPage() {
                         setSelectedDate(cell.date);
                         setSelectedTime("");
                         setBookingSuccess(null);
-                        setError("");
+                        setFormError("");
                       }}
                       className={`min-h-[96px] rounded-2xl border p-3 text-left transition ${
                         cell.isPast
@@ -1164,7 +1185,7 @@ export default function PublicEmployeeBookingPage() {
                           <p className="text-xs">Pasado</p>
                         ) : cell.info ? (
                           <>
-                            <p className="-ml-0.5 pr-1 text-[13px] font-semibold leading-tight tracking-tight break-words">
+                            <p className="-ml-0.5 break-words pr-1 text-[13px] font-semibold leading-tight tracking-tight">
                               {cell.info.title}
                             </p>
                             <p className="mt-1 line-clamp-2 text-[11px]">
@@ -1195,7 +1216,7 @@ export default function PublicEmployeeBookingPage() {
                   </div>
 
                   <h3 className="mt-4 text-2xl font-bold tracking-tight text-emerald-900">
-                    Tu cita ya ha quedado registrada
+                    Tu cita ha quedado registrada
                   </h3>
 
                   <p className="mt-2 text-sm leading-6 text-emerald-800">
@@ -1258,7 +1279,7 @@ export default function PublicEmployeeBookingPage() {
                       href={slug ? `/reservar/${slug}` : "/reservar"}
                       className="rounded-2xl border border-emerald-300 bg-white px-5 py-3 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-100"
                     >
-                      Volver a la portada del salón
+                      Volver al salón
                     </Link>
                   </div>
                 </div>
@@ -1299,16 +1320,16 @@ export default function PublicEmployeeBookingPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-zinc-700">
-                  Horas libres
+                  Horarios disponibles
                 </label>
 
                 {loadingDay ? (
                   <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-                    Cargando horas...
+                    Cargando horarios...
                   </div>
                 ) : daySlots.length === 0 ? (
                   <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-                    No hay horas disponibles para ese día.
+                    No hay horarios disponibles para ese día.
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -1319,7 +1340,7 @@ export default function PublicEmployeeBookingPage() {
                         onClick={() => {
                           setSelectedTime(slot);
                           setBookingSuccess(null);
-                          setError("");
+                          setFormError("");
                         }}
                         className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${
                           selectedTime === slot
@@ -1351,6 +1372,8 @@ export default function PublicEmployeeBookingPage() {
                   <input
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
+                    required
+                    autoComplete="name"
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none transition focus:border-black"
                     placeholder="Tu nombre"
                   />
@@ -1363,6 +1386,8 @@ export default function PublicEmployeeBookingPage() {
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    required
+                    autoComplete="tel"
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none transition focus:border-black"
                     placeholder="Tu teléfono"
                   />
@@ -1377,13 +1402,13 @@ export default function PublicEmployeeBookingPage() {
                     onChange={(e) => setNotes(e.target.value)}
                     rows={4}
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none transition focus:border-black"
-                    placeholder="Alguna indicación adicional"
+                    placeholder="Alguna indicación adicional, si la necesitas"
                   />
                 </div>
 
-                {error ? (
+                {formError ? (
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-                    {error}
+                    {formError}
                   </div>
                 ) : null}
 

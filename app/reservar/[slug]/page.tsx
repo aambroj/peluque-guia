@@ -142,8 +142,6 @@ export default function PublicBusinessBookingPage() {
 
   const [business, setBusiness] = useState<BusinessPublic | null>(null);
   const [empleados, setEmpleados] = useState<EmpleadoPublico[]>([]);
-  const [hiddenEmployeesWithoutSchedule, setHiddenEmployeesWithoutSchedule] =
-    useState<EmpleadoPublico[]>([]);
   const [hasPublicServices, setHasPublicServices] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -249,20 +247,13 @@ export default function PublicBusinessBookingPage() {
           hasValidWorkingSchedule(schedulesByEmployee.get(empleado.id) ?? [])
         );
 
-        const ocultosSinHorario = publicables.filter(
-          (empleado) =>
-            !hasValidWorkingSchedule(schedulesByEmployee.get(empleado.id) ?? [])
-        );
-
         const publicServicesAvailable = (servicesRes.count ?? 0) > 0;
 
         setHasPublicServices(publicServicesAvailable);
         setEmpleados(visibles);
-        setHiddenEmployeesWithoutSchedule(ocultosSinHorario);
       } catch (err) {
         setBusiness(null);
         setEmpleados([]);
-        setHiddenEmployeesWithoutSchedule([]);
         setHasPublicServices(false);
         setError(
           err instanceof Error
@@ -288,14 +279,6 @@ export default function PublicBusinessBookingPage() {
       }}
     >
       <div className="mx-auto max-w-6xl space-y-6">
-        {business?.slug ? (
-          <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500">
-            Reserva online · /reservar/{business.slug}
-          </span>
-          </div>
-          ) : null}
-
         <section className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
           <div className="grid gap-8 p-8 lg:grid-cols-[1.3fr_0.7fr] lg:p-10">
             <div>
@@ -315,8 +298,8 @@ export default function PublicBusinessBookingPage() {
               </h1>
 
               <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-600">
-                Elige el profesional con el que quieres reservar y consulta sus
-                días y horas disponibles de forma rápida, clara y cómoda.
+                Elige al profesional con el que quieres reservar y consulta sus
+                horarios disponibles de forma rápida, cómoda y clara.
               </p>
 
               {publicBookingMessage ? (
@@ -350,10 +333,10 @@ export default function PublicBusinessBookingPage() {
                   Reserva online
                 </span>
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
-                  Selección de profesional
+                  Elige profesional
                 </span>
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
-                  Disponibilidad visible
+                  Horarios disponibles
                 </span>
               </div>
             </div>
@@ -384,14 +367,13 @@ export default function PublicBusinessBookingPage() {
                 ) : null}
 
                 <p className="text-sm font-medium text-zinc-700">
-                  Reserva con tu salón
+                  Reserva en tu salón
                 </p>
                 <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
                   {business?.name || "Salón"}
                 </p>
                 <p className="mt-3 text-sm leading-6 text-zinc-600">
-                  Una experiencia de reserva más cuidada, directa y clara para
-                  tus clientes.
+                  Una forma sencilla y directa de pedir cita online.
                 </p>
               </div>
 
@@ -404,7 +386,7 @@ export default function PublicBusinessBookingPage() {
                     {loading ? "..." : empleados.length}
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">
-                    Para reservar online ahora mismo
+                    Disponibles para reservar online
                   </p>
                 </div>
 
@@ -413,7 +395,8 @@ export default function PublicBusinessBookingPage() {
                     Reserva rápida
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-500">
-                    Elige profesional y accede directamente a su calendario.
+                    Selecciona un profesional y entra directamente en su
+                    calendario.
                   </p>
                 </div>
               </div>
@@ -434,27 +417,13 @@ export default function PublicBusinessBookingPage() {
             {!hasPublicServices ? (
               <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-amber-900">
-                  Este salón todavía no tiene servicios disponibles para reserva
-                  online
+                  La reserva online no está disponible en este momento
                 </h2>
                 <p className="mt-2 text-sm text-amber-800">
-                  Ahora mismo los clientes no pueden continuar al calendario
-                  porque todavía no hay servicios públicos activos para reservar.
-                  Cuando el salón active al menos un servicio online, los
-                  botones de reserva se habilitarán automáticamente.
+                  Ahora mismo no es posible continuar con la reserva online.
+                  Puedes intentarlo más tarde o ponerte en contacto con el
+                  salón.
                 </p>
-              </section>
-            ) : null}
-
-            {hiddenEmployeesWithoutSchedule.length > 0 ? (
-              <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800 shadow-sm">
-                Hay {hiddenEmployeesWithoutSchedule.length} profesional
-                {hiddenEmployeesWithoutSchedule.length === 1 ? "" : "es"} que
-                aún no aparece
-                {hiddenEmployeesWithoutSchedule.length === 1 ? "" : "n"} en la
-                reserva online porque no tiene
-                {hiddenEmployeesWithoutSchedule.length === 1 ? "" : "n"} horario
-                configurado.
               </section>
             ) : null}
 
@@ -475,14 +444,14 @@ export default function PublicBusinessBookingPage() {
                 <p className="text-sm text-zinc-500">
                   {hasPublicServices
                     ? "Elige con quién quieres tu próxima cita."
-                    : "Primero el salón debe activar al menos un servicio público."}
+                    : "La reserva online no está disponible temporalmente."}
                 </p>
               </div>
 
               {empleados.length === 0 ? (
                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-8 text-zinc-600">
-                  No hay profesionales disponibles para reserva online en este
-                  momento.
+                  Ahora mismo no hay profesionales disponibles para reservar
+                  online.
                 </div>
               ) : (
                 <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
@@ -508,7 +477,7 @@ export default function PublicBusinessBookingPage() {
                               {empleado.name || "Profesional"}
                             </h3>
                             <p className="mt-1 text-sm text-zinc-500">
-                              {empleado.role || "Profesional del salón"}
+                              {empleado.role || "Profesional"}
                             </p>
                           </div>
                         </div>
@@ -525,22 +494,13 @@ export default function PublicBusinessBookingPage() {
                         </span>
                       </div>
 
-                      <div className="mt-5 space-y-2 rounded-2xl bg-zinc-50 p-4 text-sm text-zinc-600">
+                      <div className="mt-5 rounded-2xl bg-zinc-50 p-4 text-sm text-zinc-600">
                         <p>
                           <span className="font-medium text-zinc-800">
                             Estado:
                           </span>{" "}
                           {empleado.status || "Disponible"}
                         </p>
-
-                        {empleado.phone ? (
-                          <p>
-                            <span className="font-medium text-zinc-800">
-                              Contacto:
-                            </span>{" "}
-                            {empleado.phone}
-                          </p>
-                        ) : null}
                       </div>
 
                       <div className="mt-6">
@@ -561,7 +521,7 @@ export default function PublicBusinessBookingPage() {
                             disabled
                             className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-400"
                           >
-                            Reserva no disponible todavía
+                            Reserva no disponible
                           </button>
                         )}
                       </div>
