@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getServerBusinessContext } from "@/lib/supabase-server";
+import { isServiceActive, normalizeStatus } from "@/lib/service-status";
 
 type EditarReservaPageProps = {
   params: Promise<{
@@ -29,6 +30,12 @@ type ServicioOption = {
   id: number;
   name: string;
   status?: string | null;
+  is_active?: boolean | null;
+  active?: boolean | null;
+  enabled?: boolean | null;
+  is_disabled?: boolean | null;
+  disabled?: boolean | null;
+  deleted_at?: string | null;
 };
 
 const ALLOWED_STATUSES = new Set([
@@ -41,40 +48,6 @@ const ALLOWED_STATUSES = new Set([
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
-
-function normalizeStatus(value: unknown) {
-  return typeof value === "string"
-    ? value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim()
-        .toLowerCase()
-    : "";
-  }
-
-function isServiceActive(servicio: Record<string, any> | null | undefined) {
-  if (!servicio) return false;
-
-  const status = normalizeStatus(servicio.status);
-
-  if (
-    status === "inactivo" ||
-    status === "desactivado" ||
-    status === "deshabilitado"
-  ) {
-    return false;
-  }
-
-  if ("is_active" in servicio) return Boolean(servicio.is_active);
-  if ("active" in servicio) return Boolean(servicio.active);
-  if ("enabled" in servicio) return Boolean(servicio.enabled);
-  if ("is_disabled" in servicio) return !Boolean(servicio.is_disabled);
-  if ("disabled" in servicio) return !Boolean(servicio.disabled);
-  if ("deleted_at" in servicio) return !servicio.deleted_at;
-
-  return true;
-}
-
 
 function toNumber(value: unknown) {
   const n = Number(value);
@@ -457,14 +430,14 @@ export default async function EditarReservaPage({
       );
     }
 
-const sameServiceAsCurrent = reservaActual.service_id === service_id;
-const selectedServiceIsActive = isServiceActive(servicioSeleccionado as any);
+    const sameServiceAsCurrent = reservaActual.service_id === service_id;
+    const selectedServiceIsActive = isServiceActive(servicioSeleccionado as any);
 
-if (!selectedServiceIsActive && !sameServiceAsCurrent) {
-  redirect(
-    `/reservas/editar/${id}?error=No+puedes+asignar+un+servicio+desactivado`
-  );
-}
+    if (!selectedServiceIsActive && !sameServiceAsCurrent) {
+      redirect(
+        `/reservas/editar/${id}?error=No+puedes+asignar+un+servicio+desactivado`
+      );
+    }
 
     if (horarioError) {
       redirect(
@@ -657,7 +630,7 @@ if (!selectedServiceIsActive && !sameServiceAsCurrent) {
     { data: reserva, error: reservaError },
     { data: clientes, error: clientesError },
     { data: empleados, error: empleadosError },
-    { data: serviciosActivos, error: serviciosError },
+    { data: servicios, error: serviciosError },
   ] = await Promise.all([
     supabaseAdmin
       .from("reservas")
@@ -682,36 +655,28 @@ if (!selectedServiceIsActive && !sameServiceAsCurrent) {
 
     supabaseAdmin
       .from("servicios")
-      .select("id, name, status")
+      .select(
+        "id, name, status, is_active, active, enabled, is_disabled, disabled, deleted_at"
+      )
       .eq("business_id", businessId)
-      .eq("status", "Activo")
       .order("name", { ascending: true }),
   ]);
 
-  let servicioActualDesactivado: ServicioOption | null = null;
-  let servicioActualDesactivadoError: string | null = null;
+  const allServices = (servicios ?? []) as ServicioOption[];
+  const serviciosActivos = allServices.filter((servicio) =>
+    isServiceActive(servicio as any)
+  );
 
-  if (
-    reserva &&
-    reserva.service_id &&
-    !(serviciosActivos ?? []).some((s) => s.id === reserva.service_id)
-  ) {
-    const { data, error } = await supabaseAdmin
-      .from("servicios")
-      .select("id, name, status")
-      .eq("id", reserva.service_id)
-      .eq("business_id", businessId)
-      .maybeSingle();
-
-    if (error) {
-      servicioActualDesactivadoError = error.message;
-    } else if (data) {
-      servicioActualDesactivado = data as ServicioOption;
-    }
-  }
+  const servicioActualDesactivado =
+    reserva && reserva.service_id
+      ? allServices.find(
+          (servicio) =>
+            servicio.id === reserva.service_id && !isServiceActive(servicio)
+        ) ?? null
+      : null;
 
   const serviciosOptions: ServicioOption[] = [
-    ...((serviciosActivos ?? []) as ServicioOption[]),
+    ...serviciosActivos,
     ...(servicioActualDesactivado ? [servicioActualDesactivado] : []),
   ];
 
@@ -721,7 +686,6 @@ if (!selectedServiceIsActive && !sameServiceAsCurrent) {
     clientesError?.message,
     empleadosError?.message,
     serviciosError?.message,
-    servicioActualDesactivadoError,
   ].filter(Boolean);
 
   if (!reserva && !reservaError) {
@@ -852,7 +816,7 @@ if (!selectedServiceIsActive && !sameServiceAsCurrent) {
               >
                 <option value="">Selecciona un servicio</option>
                 {serviciosOptions.map((servicio) => {
-                  const isDeactivated = !isServiceActive(servicio as any);
+                  const isDeactivated = !isServiceActive(servicio);
 
                   return (
                     <option key={servicio.id} value={servicio.id}>

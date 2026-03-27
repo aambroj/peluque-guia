@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getServerBusinessContext } from "@/lib/supabase-server";
+import { isServiceActive, normalizeStatus } from "@/lib/service-status";
 
 type AdminBookingBody = {
   client_id?: string | number;
@@ -35,39 +36,6 @@ const ALLOWED_STATUSES = new Set([
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeStatus(value: unknown) {
-  return typeof value === "string"
-    ? value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim()
-        .toLowerCase()
-    : "";
-  }
-
-  function isServiceActive(servicio: Record<string, any> | null | undefined) {
-  if (!servicio) return false;
-
-  const status = normalizeStatus(servicio.status);
-
-  if (
-    status === "inactivo" ||
-    status === "desactivado" ||
-    status === "deshabilitado"
-  ) {
-    return false;
-  }
-
-  if ("is_active" in servicio) return Boolean(servicio.is_active);
-  if ("active" in servicio) return Boolean(servicio.active);
-  if ("enabled" in servicio) return Boolean(servicio.enabled);
-  if ("is_disabled" in servicio) return !Boolean(servicio.is_disabled);
-  if ("disabled" in servicio) return !Boolean(servicio.disabled);
-  if ("deleted_at" in servicio) return !servicio.deleted_at;
-
-  return true;
 }
 
 function toNumber(value: unknown) {
@@ -357,7 +325,9 @@ export async function POST(request: Request) {
 
     if (timeOffError) {
       return NextResponse.json(
-        { error: `Error al comprobar bloqueos/vacaciones: ${timeOffError.message}` },
+        {
+          error: `Error al comprobar bloqueos/vacaciones: ${timeOffError.message}`,
+        },
         { status: 500 }
       );
     }
@@ -409,14 +379,15 @@ export async function POST(request: Request) {
     }
 
     if (!isServiceActive(servicio as any)) {
-  return NextResponse.json(
-    {
-      error:
-        "El servicio seleccionado está desactivado. Actualiza la página y elige otro.",
-     },
-     { status: 409 }
-     );
+      return NextResponse.json(
+        {
+          error:
+            "El servicio seleccionado está desactivado. Actualiza la página y elige otro.",
+        },
+        { status: 409 }
+      );
     }
+
     const serviceDurationMinutes = getServiceDurationMinutes(servicio);
 
     if (!serviceDurationMinutes) {
@@ -433,7 +404,9 @@ export async function POST(request: Request) {
 
     if (priceAtBooking === null || priceAtBooking < 0) {
       return NextResponse.json(
-        { error: "El servicio no tiene un precio válido para guardar la reserva." },
+        {
+          error: "El servicio no tiene un precio válido para guardar la reserva.",
+        },
         { status: 400 }
       );
     }
@@ -539,7 +512,9 @@ export async function POST(request: Request) {
 
       if (existingStart === null) continue;
 
-      let existingEnd = parseTimeToMinutes(normalizeText((reserva as any).end_time));
+      let existingEnd = parseTimeToMinutes(
+        normalizeText((reserva as any).end_time)
+      );
 
       if (existingEnd === null || existingEnd <= existingStart) {
         const servicioExistente = Array.isArray((reserva as any).servicio)
