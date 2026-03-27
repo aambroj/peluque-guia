@@ -66,6 +66,16 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function getContrastTextColor(hex: string) {
+  const safeHex = sanitizeHexColor(hex).replace("#", "");
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  return brightness >= 155 ? "#111827" : "#ffffff";
+}
+
 function parseTimeToMinutes(time: string | null | undefined) {
   if (!time) return null;
 
@@ -112,6 +122,17 @@ function isEmployeePublicBookable(empleado: EmpleadoPublico) {
   );
 }
 
+function getEmployeeInitials(name: string | null | undefined) {
+  const safe = String(name ?? "").trim();
+
+  if (!safe) return "PR";
+
+  const parts = safe.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+
+  return initials || "PR";
+}
+
 export default function PublicBusinessBookingPage() {
   const params = useParams<{ slug: string }>();
   const slug = normalizeSlug(String(params.slug ?? ""));
@@ -126,6 +147,11 @@ export default function PublicBusinessBookingPage() {
   const accentColor = useMemo(
     () => sanitizeHexColor(business?.brand_primary_color),
     [business?.brand_primary_color]
+  );
+
+  const accentTextColor = useMemo(
+    () => getContrastTextColor(accentColor),
+    [accentColor]
   );
 
   const publicBookingMessage = useMemo(
@@ -234,7 +260,15 @@ export default function PublicBusinessBookingPage() {
   }, [slug]);
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10">
+    <main
+      className="min-h-screen px-6 py-8 md:py-10"
+      style={{
+        background: `linear-gradient(180deg, ${hexToRgba(
+          accentColor,
+          0.08
+        )} 0%, #fafafa 220px)`,
+      }}
+    >
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <Link
@@ -243,55 +277,143 @@ export default function PublicBusinessBookingPage() {
           >
             ← Volver
           </Link>
+
+          {business?.slug ? (
+            <span className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500">
+              /reservar/{business.slug}
+            </span>
+          ) : null}
         </div>
 
-        <section className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <span
-                className="inline-flex rounded-full border px-3 py-1 text-xs font-medium"
+        <section className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
+          <div className="grid gap-8 p-8 lg:grid-cols-[1.3fr_0.7fr] lg:p-10">
+            <div>
+              <div className="inline-flex rounded-full border px-3 py-1 text-xs font-medium"
                 style={{
                   color: accentColor,
-                  borderColor: hexToRgba(accentColor, 0.22),
+                  borderColor: hexToRgba(accentColor, 0.2),
                   backgroundColor: hexToRgba(accentColor, 0.08),
                 }}
               >
-                Reserva online
-              </span>
-            </div>
-
-            {publicLogoUrl ? (
-              <div className="flex items-center">
-                <img
-                  src={publicLogoUrl}
-                  alt={business?.name ? `Logo de ${business.name}` : "Logo del salón"}
-                  className="h-16 w-auto rounded-xl border border-zinc-200 bg-white p-2 object-contain"
-                />
+                Reserva online oficial
               </div>
-            ) : null}
-          </div>
 
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
-            {business?.name || "Reserva tu cita online"}
-          </h1>
+              <h1 className="mt-5 text-4xl font-bold tracking-tight text-zinc-900 md:text-5xl">
+                {business?.name || "Reserva tu cita online"}
+              </h1>
 
-          <p className="mt-2 text-zinc-600">
-            Elige el profesional con el que quieres reservar y consulta sus días
-            y horas disponibles.
-          </p>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-600">
+                Elige el profesional con el que quieres reservar y consulta sus
+                días y horas disponibles de forma rápida, clara y cómoda.
+              </p>
 
-          {publicBookingMessage ? (
-            <div
-              className="mt-5 rounded-2xl border p-4 text-sm"
-              style={{
-                borderColor: hexToRgba(accentColor, 0.22),
-                backgroundColor: hexToRgba(accentColor, 0.06),
-                color: "#27272a",
-              }}
-            >
-              {publicBookingMessage}
+              {publicBookingMessage ? (
+                <div
+                  className="mt-6 rounded-3xl border p-5 text-sm leading-6"
+                  style={{
+                    borderColor: hexToRgba(accentColor, 0.2),
+                    backgroundColor: hexToRgba(accentColor, 0.06),
+                    color: "#27272a",
+                  }}
+                >
+                  {publicBookingMessage}
+                </div>
+              ) : null}
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <a
+                  href="#profesionales"
+                  className="inline-flex rounded-2xl px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+                  style={{
+                    backgroundColor: accentColor,
+                    color: accentTextColor,
+                  }}
+                >
+                  Elegir profesional
+                </a>
+
+                <Link
+                  href="/reservar"
+                  className="inline-flex rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Ver otros salones
+                </Link>
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
+                  Reserva online
+                </span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
+                  Selección de profesional
+                </span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
+                  Disponibilidad visible
+                </span>
+              </div>
             </div>
-          ) : null}
+
+            <div className="flex h-full flex-col justify-between gap-4">
+              <div
+                className="rounded-[2rem] p-6"
+                style={{
+                  background: `linear-gradient(135deg, ${hexToRgba(
+                    accentColor,
+                    0.14
+                  )}, ${hexToRgba(accentColor, 0.05)})`,
+                  border: `1px solid ${hexToRgba(accentColor, 0.16)}`,
+                }}
+              >
+                {publicLogoUrl ? (
+                  <div className="mb-5">
+                    <img
+                      src={publicLogoUrl}
+                      alt={
+                        business?.name
+                          ? `Logo de ${business.name}`
+                          : "Logo del salón"
+                      }
+                      className="h-20 w-auto rounded-2xl border border-zinc-200 bg-white p-2 object-contain"
+                    />
+                  </div>
+                ) : null}
+
+                <p className="text-sm font-medium text-zinc-700">
+                  Reserva con tu salón
+                </p>
+                <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+                  {business?.name || "Salón"}
+                </p>
+                <p className="mt-3 text-sm leading-6 text-zinc-600">
+                  Una experiencia de reserva más cuidada, directa y clara para
+                  tus clientes.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Profesionales disponibles
+                  </p>
+                  <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
+                    {loading ? "..." : empleados.length}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Para reservar online ahora mismo
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Reserva rápida
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-500">
+                    Elige profesional y accede directamente a su calendario.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         {loading ? (
@@ -316,71 +438,106 @@ export default function PublicBusinessBookingPage() {
               </section>
             ) : null}
 
-            {empleados.length === 0 ? (
-              <section className="rounded-3xl border border-zinc-200 bg-white p-8 text-zinc-600 shadow-sm">
-                No hay profesionales disponibles para reserva online en este
-                momento.
-              </section>
-            ) : (
-              <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {empleados.map((empleado) => (
-                  <article
-                    key={empleado.id}
-                    className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-xl font-semibold text-zinc-900">
-                          {empleado.name || "Profesional"}
-                        </h2>
-                        <p className="mt-1 text-sm text-zinc-500">
-                          {empleado.role || "Profesional del salón"}
-                        </p>
+            <section
+              id="profesionales"
+              className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8"
+            >
+              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-zinc-500">
+                    Selecciona profesional
+                  </p>
+                  <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900">
+                    Profesionales disponibles para reservar
+                  </h2>
+                </div>
+
+                <p className="text-sm text-zinc-500">
+                  Elige con quién quieres tu próxima cita.
+                </p>
+              </div>
+
+              {empleados.length === 0 ? (
+                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-8 text-zinc-600">
+                  No hay profesionales disponibles para reserva online en este
+                  momento.
+                </div>
+              ) : (
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                  {empleados.map((empleado) => (
+                    <article
+                      key={empleado.id}
+                      className="group rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div
+                            className="flex h-14 w-14 items-center justify-center rounded-2xl text-sm font-bold"
+                            style={{
+                              backgroundColor: hexToRgba(accentColor, 0.12),
+                              color: accentColor,
+                            }}
+                          >
+                            {getEmployeeInitials(empleado.name)}
+                          </div>
+
+                          <div>
+                            <h3 className="text-xl font-semibold text-zinc-900">
+                              {empleado.name || "Profesional"}
+                            </h3>
+                            <p className="mt-1 text-sm text-zinc-500">
+                              {empleado.role || "Profesional del salón"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className="rounded-full border px-3 py-1 text-xs font-medium"
+                          style={{
+                            color: accentColor,
+                            borderColor: hexToRgba(accentColor, 0.22),
+                            backgroundColor: hexToRgba(accentColor, 0.08),
+                          }}
+                        >
+                          Online
+                        </span>
                       </div>
 
-                      <span
-                        className="rounded-full border px-3 py-1 text-xs font-medium"
-                        style={{
-                          color: accentColor,
-                          borderColor: hexToRgba(accentColor, 0.22),
-                          backgroundColor: hexToRgba(accentColor, 0.08),
-                        }}
-                      >
-                        Reserva online
-                      </span>
-                    </div>
-
-                    <div className="mt-4 space-y-2 text-sm text-zinc-600">
-                      <p>
-                        <span className="font-medium text-zinc-800">
-                          Estado:
-                        </span>{" "}
-                        {empleado.status || "Disponible"}
-                      </p>
-
-                      {empleado.phone ? (
+                      <div className="mt-5 space-y-2 rounded-2xl bg-zinc-50 p-4 text-sm text-zinc-600">
                         <p>
                           <span className="font-medium text-zinc-800">
-                            Contacto:
+                            Estado:
                           </span>{" "}
-                          {empleado.phone}
+                          {empleado.status || "Disponible"}
                         </p>
-                      ) : null}
-                    </div>
 
-                    <div className="mt-6">
-                      <Link
-                        href={`/reservar/${slug}/${empleado.id}`}
-                        className="inline-flex rounded-xl px-4 py-3 text-sm font-medium text-white transition hover:opacity-90"
-                        style={{ backgroundColor: accentColor }}
-                      >
-                        Ver calendario y reservar
-                      </Link>
-                    </div>
-                  </article>
-                ))}
-              </section>
-            )}
+                        {empleado.phone ? (
+                          <p>
+                            <span className="font-medium text-zinc-800">
+                              Contacto:
+                            </span>{" "}
+                            {empleado.phone}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-6">
+                        <Link
+                          href={`/reservar/${slug}/${empleado.id}`}
+                          className="inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition hover:opacity-90"
+                          style={{
+                            backgroundColor: accentColor,
+                            color: accentTextColor,
+                          }}
+                        >
+                          Ver calendario y reservar
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </>
         )}
       </div>

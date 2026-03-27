@@ -124,6 +124,16 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function getContrastTextColor(hex: string) {
+  const safeHex = sanitizeHexColor(hex).replace("#", "");
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  return brightness >= 155 ? "#111827" : "#ffffff";
+}
+
 function parseTimeToMinutes(time: string | null | undefined) {
   if (!time) return null;
 
@@ -322,6 +332,17 @@ function buildAvailabilityUrl(params: {
   return `/api/public-availability?${search.toString()}`;
 }
 
+function getEmployeeInitials(name: string | null | undefined) {
+  const safe = String(name ?? "").trim();
+
+  if (!safe) return "PR";
+
+  const parts = safe.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
+
+  return initials || "PR";
+}
+
 export default function PublicEmployeeBookingPage() {
   const params = useParams<{ slug: string; employeeId: string }>();
 
@@ -354,6 +375,11 @@ export default function PublicEmployeeBookingPage() {
   const accentColor = useMemo(
     () => sanitizeHexColor(business?.brand_primary_color),
     [business?.brand_primary_color]
+  );
+
+  const accentTextColor = useMemo(
+    () => getContrastTextColor(accentColor),
+    [accentColor]
   );
 
   const publicBookingMessage = useMemo(
@@ -786,7 +812,15 @@ export default function PublicEmployeeBookingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-8 md:px-6 md:py-10">
+    <main
+      className="min-h-screen px-4 py-8 md:px-6 md:py-10"
+      style={{
+        background: `linear-gradient(180deg, ${hexToRgba(
+          accentColor,
+          0.08
+        )} 0%, #fafafa 240px)`,
+      }}
+    >
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <Link
@@ -795,12 +829,18 @@ export default function PublicEmployeeBookingPage() {
           >
             ← Volver a profesionales
           </Link>
+
+          {business?.slug ? (
+            <span className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500">
+              /reservar/{business.slug}/{employeeId}
+            </span>
+          ) : null}
         </div>
 
-        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <span
+        <section className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
+          <div className="grid gap-8 p-6 md:p-8 lg:grid-cols-[1.25fr_0.75fr] lg:p-10">
+            <div>
+              <div
                 className="inline-flex rounded-full border px-3 py-1 text-xs font-medium"
                 style={{
                   color: accentColor,
@@ -809,41 +849,113 @@ export default function PublicEmployeeBookingPage() {
                 }}
               >
                 Reserva online
-              </span>
-            </div>
-
-            {publicLogoUrl ? (
-              <div className="flex items-center">
-                <img
-                  src={publicLogoUrl}
-                  alt={business?.name ? `Logo de ${business.name}` : "Logo del salón"}
-                  className="h-16 w-auto rounded-xl border border-zinc-200 bg-white p-2 object-contain"
-                />
               </div>
-            ) : null}
-          </div>
 
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
-            Reserva online
-          </h1>
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900 md:text-4xl">
+                Reserva tu cita con {employee?.name ?? "tu profesional"}
+              </h1>
 
-          <p className="mt-2 text-zinc-600">
-            {business?.name ? `${business.name} · ` : ""}
-            Reserva tu cita con {employee?.name ?? "el profesional seleccionado"}.
-          </p>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600">
+                {business?.name ? `${business.name}. ` : ""}
+                Elige servicio, selecciona día y hora libre, y completa tus datos
+                para dejar la reserva confirmada.
+              </p>
 
-          {publicBookingMessage ? (
-            <div
-              className="mt-5 rounded-2xl border p-4 text-sm"
-              style={{
-                borderColor: hexToRgba(accentColor, 0.22),
-                backgroundColor: hexToRgba(accentColor, 0.06),
-                color: "#27272a",
-              }}
-            >
-              {publicBookingMessage}
+              {publicBookingMessage ? (
+                <div
+                  className="mt-6 rounded-3xl border p-5 text-sm leading-6"
+                  style={{
+                    borderColor: hexToRgba(accentColor, 0.22),
+                    backgroundColor: hexToRgba(accentColor, 0.06),
+                    color: "#27272a",
+                  }}
+                >
+                  {publicBookingMessage}
+                </div>
+              ) : null}
+
+              <div className="mt-8 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
+                  Calendario visible
+                </span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
+                  Horas libres reales
+                </span>
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 font-medium text-zinc-700">
+                  Reserva online directa
+                </span>
+              </div>
             </div>
-          ) : null}
+
+            <div className="flex flex-col gap-4">
+              <div
+                className="rounded-[2rem] p-6"
+                style={{
+                  background: `linear-gradient(135deg, ${hexToRgba(
+                    accentColor,
+                    0.14
+                  )}, ${hexToRgba(accentColor, 0.05)})`,
+                  border: `1px solid ${hexToRgba(accentColor, 0.16)}`,
+                }}
+              >
+                {publicLogoUrl ? (
+                  <div className="mb-5">
+                    <img
+                      src={publicLogoUrl}
+                      alt={business?.name ? `Logo de ${business.name}` : "Logo del salón"}
+                      className="h-20 w-auto rounded-2xl border border-zinc-200 bg-white p-2 object-contain"
+                    />
+                  </div>
+                ) : null}
+
+                <div className="flex items-center gap-4">
+                  <div
+                    className="flex h-16 w-16 items-center justify-center rounded-2xl text-base font-bold"
+                    style={{
+                      backgroundColor: hexToRgba(accentColor, 0.12),
+                      color: accentColor,
+                    }}
+                  >
+                    {getEmployeeInitials(employee?.name)}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-zinc-700">
+                      Profesional seleccionado
+                    </p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight text-zinc-900">
+                      {employee?.name ?? "Profesional"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      {business?.name ?? "Salón"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                  <p className="text-sm font-semibold text-zinc-900">Mes actual</p>
+                  <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 capitalize">
+                    {formatMonthLabel(month)}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Navega entre meses y elige el mejor día.
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                  <p className="text-sm font-semibold text-zinc-900">Día elegido</p>
+                  <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+                    {selectedDate ? formatDate(selectedDate) : "--/--/----"}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Después solo tendrás que escoger una hora libre.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
@@ -860,7 +972,7 @@ export default function PublicEmployeeBookingPage() {
                     setSelectedTime("");
                     setSuccess("");
                   }}
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none focus:border-black"
+                  className="w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 outline-none transition focus:border-black"
                 >
                   {services.map((service) => (
                     <option key={service.id} value={service.id}>
@@ -884,12 +996,12 @@ export default function PublicEmployeeBookingPage() {
                       setSelectedTime("");
                       setSuccess("");
                     }}
-                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     ←
                   </button>
 
-                  <div className="flex-1 rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-center text-sm font-medium capitalize text-zinc-800">
+                  <div className="flex-1 rounded-2xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-center text-sm font-medium capitalize text-zinc-800">
                     {formatMonthLabel(month)}
                   </div>
 
@@ -900,7 +1012,7 @@ export default function PublicEmployeeBookingPage() {
                       setSelectedTime("");
                       setSuccess("");
                     }}
-                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black"
+                    className="rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium transition hover:border-black"
                   >
                     →
                   </button>
@@ -908,13 +1020,14 @@ export default function PublicEmployeeBookingPage() {
               </div>
             </div>
 
-            <div className="mt-6">
-              <div className="flex items-end justify-between gap-4">
+            <div className="mt-8">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold">Calendario</h2>
+                  <h2 className="text-xl font-semibold text-zinc-900">
+                    Calendario de disponibilidad
+                  </h2>
                   <p className="mt-1 text-sm text-zinc-500">
-                    Verde = libre, amarillo = semilibre, rojo = ocupado o no
-                    disponible.
+                    Verde = libre, amarillo = semilibre, rojo = ocupado o no disponible.
                   </p>
                 </div>
 
@@ -954,7 +1067,7 @@ export default function PublicEmployeeBookingPage() {
                         setSelectedTime("");
                         setSuccess("");
                       }}
-                      className={`min-h-[92px] rounded-2xl border p-3 text-left transition ${
+                      className={`min-h-[96px] rounded-2xl border p-3 text-left transition ${
                         cell.isPast
                           ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400"
                           : cell.info
@@ -963,9 +1076,7 @@ export default function PublicEmployeeBookingPage() {
                       }`}
                       style={
                         cell.isSelected && !cell.isPast
-                          ? {
-                              boxShadow: `0 0 0 2px ${accentColor}`,
-                            }
+                          ? { boxShadow: `0 0 0 2px ${accentColor}` }
                           : undefined
                       }
                     >
@@ -1005,18 +1116,20 @@ export default function PublicEmployeeBookingPage() {
           </section>
 
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8">
-            <h2 className="text-xl font-semibold">Selecciona tu cita</h2>
+            <h2 className="text-xl font-semibold text-zinc-900">
+              Completa tu reserva
+            </h2>
 
             <div className="mt-4 space-y-4">
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
                 <p className="text-sm text-zinc-500">Día seleccionado</p>
-                <p className="mt-1 font-semibold">
+                <p className="mt-1 text-lg font-semibold text-zinc-900">
                   {selectedDate ? formatDate(selectedDate) : "Sin seleccionar"}
                 </p>
 
                 {daySummary ? (
                   <div
-                    className={`mt-3 rounded-xl border p-3 ${getColorClasses(
+                    className={`mt-3 rounded-2xl border p-3 ${getColorClasses(
                       daySummary.color
                     )}`}
                   >
@@ -1027,7 +1140,7 @@ export default function PublicEmployeeBookingPage() {
                   </div>
                 ) : selectedDayFromMonth ? (
                   <div
-                    className={`mt-3 rounded-xl border p-3 ${getColorClasses(
+                    className={`mt-3 rounded-2xl border p-3 ${getColorClasses(
                       selectedDayFromMonth.color
                     )}`}
                   >
@@ -1061,16 +1174,17 @@ export default function PublicEmployeeBookingPage() {
                         key={slot}
                         type="button"
                         onClick={() => setSelectedTime(slot)}
-                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                        className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${
                           selectedTime === slot
-                            ? "text-white"
-                            : "border-zinc-300 bg-white hover:border-black"
+                            ? ""
+                            : "border-zinc-300 bg-white text-zinc-800 hover:border-black"
                         }`}
                         style={
                           selectedTime === slot
                             ? {
                                 backgroundColor: accentColor,
                                 borderColor: accentColor,
+                                color: accentTextColor,
                               }
                             : undefined
                         }
@@ -1090,7 +1204,7 @@ export default function PublicEmployeeBookingPage() {
                   <input
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                    className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none transition focus:border-black"
                     placeholder="Tu nombre"
                   />
                 </div>
@@ -1102,7 +1216,7 @@ export default function PublicEmployeeBookingPage() {
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                    className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none transition focus:border-black"
                     placeholder="Tu teléfono"
                   />
                 </div>
@@ -1115,19 +1229,19 @@ export default function PublicEmployeeBookingPage() {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={4}
-                    className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-black"
+                    className="w-full rounded-2xl border border-zinc-300 px-4 py-3 outline-none transition focus:border-black"
                     placeholder="Alguna indicación adicional"
                   />
                 </div>
 
                 {error ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                  <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
                     {error}
                   </div>
                 ) : null}
 
                 {success ? (
-                  <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                  <div className="rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
                     {success}
                   </div>
                 ) : null}
@@ -1135,8 +1249,11 @@ export default function PublicEmployeeBookingPage() {
                 <button
                   type="submit"
                   disabled={saving || !selectedTime}
-                  className="w-full rounded-xl px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                  style={{ backgroundColor: accentColor }}
+                  className="w-full rounded-2xl px-5 py-3 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
+                  style={{
+                    backgroundColor: accentColor,
+                    color: accentTextColor,
+                  }}
                 >
                   {saving ? "Reservando..." : "Confirmar reserva"}
                 </button>
