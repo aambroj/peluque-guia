@@ -17,6 +17,7 @@ type ContactRequestRow = {
   status: string | null;
   created_at: string;
   last_contact_at: string | null;
+  next_follow_up_on: string | null;
 };
 
 type AdminContactoDetallePageProps = {
@@ -43,6 +44,19 @@ function formatDateTime(value: string | null | undefined) {
       timeStyle: "short",
       timeZone: "Europe/Madrid",
     }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function formatDateValue(value: string | null | undefined) {
+  if (!value) return "Sin fecha";
+
+  try {
+    return new Intl.DateTimeFormat("es-ES", {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(new Date(`${value}T12:00:00Z`));
   } catch {
     return value;
   }
@@ -225,7 +239,6 @@ export default async function AdminContactoDetallePage({
     }
 
     const rawId = String(formData.get("id") ?? "");
-
     const actionId = Number(rawId);
 
     if (!Number.isFinite(actionId) || actionId <= 0) {
@@ -246,12 +259,49 @@ export default async function AdminContactoDetallePage({
     redirect(`/admin/contactos/${actionId}`);
   }
 
+  async function saveNextFollowUp(formData: FormData) {
+    "use server";
+
+    const { user: actionUser } = await getServerBusinessContext();
+
+    if (!actionUser) {
+      redirect("/login?redirectTo=/admin/contactos");
+    }
+
+    const actionUserEmail = actionUser.email?.trim().toLowerCase() ?? "";
+
+    if (!CONTACT_ADMIN_EMAILS.includes(actionUserEmail)) {
+      redirect("/dashboard");
+    }
+
+    const rawId = String(formData.get("id") ?? "");
+    const rawDate = String(formData.get("next_follow_up_on") ?? "").trim();
+
+    const actionId = Number(rawId);
+
+    if (!Number.isFinite(actionId) || actionId <= 0) {
+      revalidatePath("/admin/contactos");
+      return;
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    await supabaseAdmin
+      .from("contact_requests")
+      .update({ next_follow_up_on: rawDate || null })
+      .eq("id", actionId);
+
+    revalidatePath("/admin/contactos");
+    revalidatePath(`/admin/contactos/${actionId}`);
+    redirect(`/admin/contactos/${actionId}`);
+  }
+
   const supabaseAdmin = getSupabaseAdmin();
 
   const { data, error } = await supabaseAdmin
     .from("contact_requests")
     .select(
-      "id, name, email, business_name, phone, employees_range, message, internal_notes, source, status, created_at, last_contact_at"
+      "id, name, email, business_name, phone, employees_range, message, internal_notes, source, status, created_at, last_contact_at, next_follow_up_on"
     )
     .eq("id", id)
     .maybeSingle();
@@ -329,7 +379,7 @@ export default async function AdminContactoDetallePage({
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Email
@@ -372,6 +422,15 @@ export default async function AdminContactoDetallePage({
               </p>
               <p className="mt-2 text-sm text-zinc-900">
                 {formatDateTime(item.last_contact_at)}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Próximo seguimiento
+              </p>
+              <p className="mt-2 text-sm text-zinc-900">
+                {formatDateValue(item.next_follow_up_on)}
               </p>
             </div>
           </div>
@@ -449,6 +508,37 @@ export default async function AdminContactoDetallePage({
                 </button>
               </form>
             </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Próximo seguimiento
+              </p>
+              <p className="text-xs text-zinc-400">
+                Fecha prevista para volver a contactar
+              </p>
+            </div>
+
+            <form action={saveNextFollowUp} className="mt-3">
+              <input type="hidden" name="id" value={item.id} />
+
+              <div className="flex flex-col gap-3 md:flex-row">
+                <input
+                  type="date"
+                  name="next_follow_up_on"
+                  defaultValue={item.next_follow_up_on ?? ""}
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                />
+
+                <button
+                  type="submit"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Guardar seguimiento
+                </button>
+              </div>
+            </form>
           </div>
 
           <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
