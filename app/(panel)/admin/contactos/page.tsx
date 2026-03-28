@@ -17,6 +17,12 @@ type ContactRequestRow = {
   created_at: string;
 };
 
+type AdminContactosPageProps = {
+  searchParams?: Promise<{
+    status?: string;
+  }>;
+};
+
 const CONTACT_ADMIN_EMAILS = (
   process.env.CONTACT_ADMIN_EMAILS?.split(",") ?? [
     "alber.ambroj@gmail.com",
@@ -38,19 +44,28 @@ function formatDateTime(value: string) {
   }
 }
 
-function normalizeStatus(value: string | null | undefined) {
+function normalizeStatusValue(value: string | null | undefined) {
   const normalized = (value ?? "").trim().toLowerCase();
 
-  if (!normalized) return "Nueva";
-  if (normalized === "new") return "Nueva";
+  if (!normalized) return "new";
+  if (normalized === "new") return "new";
+  if (normalized === "pending") return "pending";
+  if (normalized === "done") return "done";
+
+  return "new";
+}
+
+function normalizeStatusLabel(value: string | null | undefined) {
+  const normalized = normalizeStatusValue(value);
+
   if (normalized === "pending") return "Pendiente";
   if (normalized === "done") return "Atendida";
 
-  return value ?? "Nueva";
+  return "Nueva";
 }
 
 function getStatusClasses(value: string | null | undefined) {
-  const normalized = (value ?? "").trim().toLowerCase();
+  const normalized = normalizeStatusValue(value);
 
   if (normalized === "done") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -67,7 +82,7 @@ function getActionButtonClasses(params: {
   currentStatus: string | null | undefined;
   targetStatus: "new" | "pending" | "done";
 }) {
-  const current = (params.currentStatus ?? "new").trim().toLowerCase();
+  const current = normalizeStatusValue(params.currentStatus);
   const active = current === params.targetStatus;
 
   if (params.targetStatus === "done") {
@@ -87,7 +102,25 @@ function getActionButtonClasses(params: {
     : "border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100";
 }
 
-export default async function AdminContactosPage() {
+function normalizeFilterStatus(value: string | null | undefined) {
+  const normalized = (value ?? "").trim().toLowerCase();
+
+  if (normalized === "new") return "new";
+  if (normalized === "pending") return "pending";
+  if (normalized === "done") return "done";
+
+  return "all";
+}
+
+function getFilterLinkClasses(active: boolean) {
+  return active
+    ? "border-black bg-black text-white"
+    : "border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50";
+}
+
+export default async function AdminContactosPage({
+  searchParams,
+}: AdminContactosPageProps) {
   const { user } = await getServerBusinessContext();
 
   if (!user) {
@@ -99,6 +132,9 @@ export default async function AdminContactosPage() {
   if (!CONTACT_ADMIN_EMAILS.includes(userEmail)) {
     redirect("/dashboard");
   }
+
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const activeFilter = normalizeFilterStatus(resolvedSearchParams?.status);
 
   async function updateContactRequestStatus(formData: FormData) {
     "use server";
@@ -117,9 +153,11 @@ export default async function AdminContactosPage() {
 
     const rawId = String(formData.get("id") ?? "");
     const rawStatus = String(formData.get("status") ?? "").trim().toLowerCase();
+    const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
 
     const id = Number(rawId);
     const allowedStatuses = new Set(["new", "pending", "done"]);
+    const filter = normalizeFilterStatus(rawFilter);
 
     if (!Number.isFinite(id) || id <= 0 || !allowedStatuses.has(rawStatus)) {
       revalidatePath("/admin/contactos");
@@ -135,6 +173,12 @@ export default async function AdminContactosPage() {
 
     revalidatePath("/admin/contactos");
     revalidatePath("/dashboard");
+
+    if (filter === "all") {
+      redirect("/admin/contactos");
+    }
+
+    redirect(`/admin/contactos?status=${filter}`);
   }
 
   const supabaseAdmin = getSupabaseAdmin();
@@ -150,16 +194,21 @@ export default async function AdminContactosPage() {
   const requests: ContactRequestRow[] = data ?? [];
 
   const newCount = requests.filter(
-    (item) => (item.status ?? "new").toLowerCase() === "new"
+    (item) => normalizeStatusValue(item.status) === "new"
   ).length;
 
   const pendingCount = requests.filter(
-    (item) => (item.status ?? "").toLowerCase() === "pending"
+    (item) => normalizeStatusValue(item.status) === "pending"
   ).length;
 
   const doneCount = requests.filter(
-    (item) => (item.status ?? "").toLowerCase() === "done"
+    (item) => normalizeStatusValue(item.status) === "done"
   ).length;
+
+  const filteredRequests = requests.filter((item) => {
+    if (activeFilter === "all") return true;
+    return normalizeStatusValue(item.status) === activeFilter;
+  });
 
   return (
     <main className="min-h-screen bg-zinc-50">
@@ -218,26 +267,64 @@ export default async function AdminContactosPage() {
           </div>
         </div>
 
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/admin/contactos"
+            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+              activeFilter === "all"
+            )}`}
+          >
+            Todas ({requests.length})
+          </Link>
+
+          <Link
+            href="/admin/contactos?status=new"
+            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+              activeFilter === "new"
+            )}`}
+          >
+            Nuevas ({newCount})
+          </Link>
+
+          <Link
+            href="/admin/contactos?status=pending"
+            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+              activeFilter === "pending"
+            )}`}
+          >
+            Pendientes ({pendingCount})
+          </Link>
+
+          <Link
+            href="/admin/contactos?status=done"
+            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+              activeFilter === "done"
+            )}`}
+          >
+            Atendidas ({doneCount})
+          </Link>
+        </div>
+
         {error ? (
           <div className="mt-8 rounded-3xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
             No se pudieron cargar las solicitudes de contacto.
           </div>
         ) : null}
 
-        {!error && requests.length === 0 ? (
+        {!error && filteredRequests.length === 0 ? (
           <div className="mt-8 rounded-[2rem] border border-zinc-200 bg-white p-8 text-center shadow-sm">
             <p className="text-lg font-semibold text-zinc-900">
-              Todavía no hay solicitudes
+              No hay solicitudes para este filtro
             </p>
             <p className="mt-3 text-sm leading-6 text-zinc-600">
-              Cuando alguien escriba desde la página de contacto, aparecerá aquí.
+              Cambia el filtro o espera a que lleguen nuevas solicitudes.
             </p>
           </div>
         ) : null}
 
-        {!error && requests.length > 0 ? (
+        {!error && filteredRequests.length > 0 ? (
           <div className="mt-8 space-y-5">
-            {requests.map((item) => (
+            {filteredRequests.map((item) => (
               <article
                 key={item.id}
                 className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-sm"
@@ -253,7 +340,7 @@ export default async function AdminContactosPage() {
                           item.status
                         )}`}
                       >
-                        {normalizeStatus(item.status)}
+                        {normalizeStatusLabel(item.status)}
                       </span>
                     </div>
 
@@ -328,6 +415,7 @@ export default async function AdminContactosPage() {
                     <form action={updateContactRequestStatus}>
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="status" value="new" />
+                      <input type="hidden" name="filter" value={activeFilter} />
                       <button
                         type="submit"
                         className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
@@ -344,6 +432,7 @@ export default async function AdminContactosPage() {
                     <form action={updateContactRequestStatus}>
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="status" value="pending" />
+                      <input type="hidden" name="filter" value={activeFilter} />
                       <button
                         type="submit"
                         className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
@@ -360,6 +449,7 @@ export default async function AdminContactosPage() {
                     <form action={updateContactRequestStatus}>
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="status" value="done" />
+                      <input type="hidden" name="filter" value={activeFilter} />
                       <button
                         type="submit"
                         className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
