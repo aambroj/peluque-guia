@@ -12,6 +12,12 @@ type NavItem = {
   description: string;
 };
 
+type AdminContactRequestsSummary = {
+  isAdmin: boolean;
+  newCount: number;
+  error?: string;
+};
+
 const FULL_NAV_ITEMS: NavItem[] = [
   {
     href: "/dashboard",
@@ -97,6 +103,7 @@ export default function Sidebar() {
   const [isLoadingAccessState, setIsLoadingAccessState] = useState(true);
   const [isPendingActivation, setIsPendingActivation] = useState(false);
   const [isContactAdmin, setIsContactAdmin] = useState(false);
+  const [newContactRequestsCount, setNewContactRequestsCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,15 +118,42 @@ export default function Sidebar() {
           if (!cancelled) {
             setIsPendingActivation(false);
             setIsContactAdmin(false);
+            setNewContactRequestsCount(0);
             setIsLoadingAccessState(false);
           }
           return;
         }
 
         const userEmail = user.email?.trim().toLowerCase() ?? "";
+        const adminMatch = CONTACT_ADMIN_EMAILS.includes(userEmail);
 
         if (!cancelled) {
-          setIsContactAdmin(CONTACT_ADMIN_EMAILS.includes(userEmail));
+          setIsContactAdmin(adminMatch);
+        }
+
+        if (adminMatch) {
+          try {
+            const response = await fetch(
+              "/api/admin-contact-requests-summary",
+              {
+                method: "GET",
+                cache: "no-store",
+              }
+            );
+
+            const result =
+              (await response.json()) as AdminContactRequestsSummary;
+
+            if (!cancelled && result?.isAdmin) {
+              setNewContactRequestsCount(result.newCount ?? 0);
+            }
+          } catch {
+            if (!cancelled) {
+              setNewContactRequestsCount(0);
+            }
+          }
+        } else if (!cancelled) {
+          setNewContactRequestsCount(0);
         }
 
         const { data: profile } = await supabase
@@ -155,6 +189,7 @@ export default function Sidebar() {
         if (!cancelled) {
           setIsPendingActivation(false);
           setIsContactAdmin(false);
+          setNewContactRequestsCount(0);
           setIsLoadingAccessState(false);
         }
       }
@@ -285,19 +320,36 @@ export default function Sidebar() {
                   : "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100"
               }`}
             >
-              <p
-                className={`text-sm font-semibold ${
-                  adminContactosActive ? "text-white" : "text-sky-950"
-                }`}
-              >
-                Solicitudes de contacto
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p
+                  className={`text-sm font-semibold ${
+                    adminContactosActive ? "text-white" : "text-sky-950"
+                  }`}
+                >
+                  Solicitudes de contacto
+                </p>
+
+                {newContactRequestsCount > 0 ? (
+                  <span
+                    className={`inline-flex min-w-[28px] items-center justify-center rounded-full px-2 py-1 text-xs font-bold ${
+                      adminContactosActive
+                        ? "bg-white text-sky-900"
+                        : "bg-sky-900 text-white"
+                    }`}
+                  >
+                    {newContactRequestsCount}
+                  </span>
+                ) : null}
+              </div>
+
               <p
                 className={`mt-1 text-xs ${
                   adminContactosActive ? "text-sky-100" : "text-sky-800"
                 }`}
               >
-                Demos y formularios de la web pública
+                {newContactRequestsCount > 0
+                  ? `Tienes ${newContactRequestsCount} nueva(s) por revisar`
+                  : "Demos y formularios de la web pública"}
               </p>
             </Link>
           ) : null}
