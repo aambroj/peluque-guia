@@ -297,6 +297,16 @@ function getReadableRole(role: string | null | undefined) {
   return role ?? "Owner";
 }
 
+type NoticeTone = "amber" | "sky" | "emerald" | "rose" | "zinc";
+
+function getMiniStatClasses(tone: NoticeTone) {
+  if (tone === "amber") return "border-amber-200 bg-amber-50";
+  if (tone === "sky") return "border-sky-200 bg-sky-50";
+  if (tone === "emerald") return "border-emerald-200 bg-emerald-50";
+  if (tone === "rose") return "border-rose-200 bg-rose-50";
+  return "border-zinc-200 bg-zinc-50";
+}
+
 export default async function CuentaPage() {
   const { supabase, user, businessId } = await getServerBusinessContext();
 
@@ -398,7 +408,9 @@ export default async function CuentaPage() {
       .maybeSingle(),
   ]);
 
-  const errores = [businessError, subscriptionError, profileError].filter(Boolean);
+  const errores = [businessError, subscriptionError, profileError].filter(
+    Boolean
+  );
 
   const planLabel = formatPlanLabel(subscription?.plan);
   const statusLabel = getEffectiveStatusLabel({
@@ -440,33 +452,100 @@ export default async function CuentaPage() {
     : null;
 
   const roleLabel = getReadableRole(profile?.role);
+  const trialEndLabel = formatDate(subscription?.trial_end);
+  const currentPeriodEndLabel = formatDate(subscription?.current_period_end);
 
   return (
     <section className="px-6 py-8">
       <div className="mx-auto max-w-6xl space-y-8">
-        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600">
-                Cuenta del negocio
+        <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
+          <div className="border-b border-zinc-200 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 p-8">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
+                  Cuenta del negocio
+                </div>
+
+                <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
+                  Gestiona tu negocio, tu plan y tu página pública
+                </h2>
+
+                <p className="mt-3 text-zinc-600">
+                  Desde aquí puedes consultar el estado real de tu suscripción,
+                  compartir tu enlace de reservas online y mantener la imagen de
+                  tu negocio más cuidada.
+                </p>
               </div>
 
-              <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
-                Cuenta y suscripción
-              </h2>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/dashboard"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Volver al panel
+                </Link>
 
-              <p className="mt-2 text-zinc-600">
-                Gestiona los datos principales del negocio, el enlace público de
-                reservas y el estado real de tu suscripción.
+                <Link
+                  href={primaryAction.href}
+                  className="rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  {primaryAction.label}
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <p className="text-sm text-zinc-500">Negocio</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {business?.name ?? "Sin nombre"}
+              </p>
+              <p className="mt-1 text-sm text-zinc-500">
+                {business?.email ?? user.email ?? "Sin email"}
               </p>
             </div>
 
-            <Link
-              href="/dashboard"
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+            <div
+              className={`rounded-2xl border p-4 ${getPlanCardClasses(
+                subscription?.plan
+              )}`}
             >
-              Volver al panel
-            </Link>
+              <p className="text-sm text-zinc-500">Plan actual</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {planLabel}
+              </p>
+              <div className="mt-3">
+                <span
+                  className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getStatusClasses(
+                    {
+                      plan: subscription?.plan,
+                      status: subscription?.status,
+                    }
+                  )}`}
+                >
+                  {statusLabel}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <p className="text-sm text-zinc-500">Capacidad incluida</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {employeeLimit} empleados
+              </p>
+              <p className="mt-1 text-sm text-zinc-500">
+                Límite para crear o reactivar equipo.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <p className="text-sm text-zinc-500">Titular / perfil</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {profile?.full_name || user.email || "Usuario"}
+              </p>
+              <p className="mt-1 text-sm text-zinc-500">Rol: {roleLabel}</p>
+            </div>
           </div>
         </div>
 
@@ -488,50 +567,44 @@ export default async function CuentaPage() {
         >
           <h3 className="text-xl font-semibold">{notice.title}</h3>
           <p className="mt-2 text-sm">{notice.description}</p>
-        </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-zinc-500">Negocio</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
-              {business?.name ?? "Sin nombre"}
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              {business?.email ?? user.email ?? "Sin email"}
-            </p>
-          </div>
-
-          <div
-            className={`rounded-3xl border p-6 shadow-sm ${getPlanCardClasses(
-              subscription?.plan
-            )}`}
-          >
-            <p className="text-sm text-zinc-500">Plan actual</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
-              {planLabel}
-            </p>
-            <div className="mt-3">
-              <span
-                className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getStatusClasses(
-                  {
-                    plan: subscription?.plan,
-                    status: subscription?.status,
-                  }
-                )}`}
-              >
-                {statusLabel}
-              </span>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div
+              className={`rounded-2xl border p-4 ${getMiniStatClasses(
+                notice.tone
+              )}`}
+            >
+              <p className="text-sm text-zinc-500">Plan</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {planLabel}
+              </p>
             </div>
-          </div>
 
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <p className="text-sm text-zinc-500">Capacidad incluida</p>
-            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
-              {employeeLimit} empleados
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              Límite aplicado al crear o reactivar miembros del equipo.
-            </p>
+            <div
+              className={`rounded-2xl border p-4 ${getMiniStatClasses(
+                notice.tone
+              )}`}
+            >
+              <p className="text-sm text-zinc-500">Estado</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {statusLabel}
+              </p>
+            </div>
+
+            <div
+              className={`rounded-2xl border p-4 ${getMiniStatClasses(
+                notice.tone
+              )}`}
+            >
+              <p className="text-sm text-zinc-500">Cobertura actual</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {trialEndLabel
+                  ? `Hasta el ${trialEndLabel}`
+                  : currentPeriodEndLabel
+                  ? `Hasta el ${currentPeriodEndLabel}`
+                  : "Según estado actual"}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -540,11 +613,12 @@ export default async function CuentaPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="max-w-3xl">
                 <h3 className="text-xl font-semibold text-emerald-900">
-                  Comparte tu página pública de reservas
+                  Tu enlace público de reservas ya está listo
                 </h3>
                 <p className="mt-2 text-sm text-emerald-800">
-                  Este es el enlace real que puedes enviar a tus clientes para
-                  que reserven online directamente en tu peluquería.
+                  Compártelo por WhatsApp, Instagram, Google Business Profile o
+                  donde prefieras. Tus clientes podrán reservar online
+                  directamente en tu peluquería.
                 </p>
 
                 <a
@@ -560,7 +634,7 @@ export default async function CuentaPage() {
               <div className="flex flex-wrap gap-3">
                 <CopyBookingUrlButton
                   value={publicBookingUrl}
-                  defaultLabel="Copiar enlace de reservas"
+                  defaultLabel="Copiar enlace"
                   copiedLabel="Enlace copiado"
                   className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
                 />
@@ -592,9 +666,20 @@ export default async function CuentaPage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold text-zinc-900">
-              Datos del negocio
-            </h3>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-zinc-900">
+                  Datos del negocio
+                </h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Información principal de tu cuenta y de tu acceso público.
+                </p>
+              </div>
+
+              <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600">
+                Negocio
+              </div>
+            </div>
 
             <div className="mt-5 space-y-4">
               <div className="rounded-2xl border border-zinc-200 p-4">
@@ -611,9 +696,11 @@ export default async function CuentaPage() {
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
                   {business?.slug ?? "Sin identificador"}
                 </p>
-                <p className="mt-2 text-sm text-zinc-500">
+
+                <p className="mt-3 text-sm text-zinc-500">
                   Enlace público de reserva online
                 </p>
+
                 <div className="mt-2 break-all rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
                   {publicBookingUrl ? (
                     <a
@@ -655,9 +742,20 @@ export default async function CuentaPage() {
               subscription?.plan
             )}`}
           >
-            <h3 className="text-xl font-semibold text-zinc-900">
-              Suscripción actual
-            </h3>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-zinc-900">
+                  Suscripción actual
+                </h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Resumen real del plan y del estado de cobro.
+                </p>
+              </div>
+
+              <div className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
+                Suscripción
+              </div>
+            </div>
 
             <div className="mt-5 space-y-4">
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -690,6 +788,22 @@ export default async function CuentaPage() {
                 </p>
               </div>
 
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                  <p className="text-sm text-zinc-500">Fin de prueba</p>
+                  <p className="mt-1 text-base font-semibold text-zinc-900">
+                    {trialEndLabel ?? "No aplica"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                  <p className="text-sm text-zinc-500">Fin de periodo actual</p>
+                  <p className="mt-1 text-base font-semibold text-zinc-900">
+                    {currentPeriodEndLabel ?? "No disponible"}
+                  </p>
+                </div>
+              </div>
+
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
                 <p className="text-sm text-zinc-500">Titular / perfil</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
@@ -708,8 +822,8 @@ export default async function CuentaPage() {
                 Acciones de suscripción
               </h3>
               <p className="mt-1 text-sm text-zinc-500">
-                Gestiona la activación del plan, la facturación y la evolución
-                de tu cuenta.
+                Gestiona el plan, la facturación y la evolución de tu cuenta
+                desde un solo sitio.
               </p>
             </div>
 
@@ -727,7 +841,7 @@ export default async function CuentaPage() {
                     href="/cuenta/facturacion"
                     className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
                   >
-                    Gestionar suscripción
+                    Gestionar facturación
                   </Link>
 
                   <StripePortalButton className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50">
@@ -788,11 +902,16 @@ export default async function CuentaPage() {
         {premiumCustomizationEnabled ? (
           <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
             <div className="mb-5">
-              <h3 className="text-xl font-semibold text-violet-900">
+              <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700">
+                Premium
+              </div>
+
+              <h3 className="mt-4 text-xl font-semibold text-violet-900">
                 Personalización Premium
               </h3>
               <p className="mt-1 text-sm text-violet-800">
-                Ajusta la apariencia básica de la reserva pública de tu negocio.
+                Ajusta la imagen básica de tu reserva pública para que encaje
+                mejor con tu marca.
               </p>
             </div>
 
@@ -860,7 +979,9 @@ export default async function CuentaPage() {
               </div>
 
               <div className="rounded-2xl border border-violet-200 bg-white p-4">
-                <p className="text-sm font-medium text-zinc-900">Vista rápida</p>
+                <p className="text-sm font-medium text-zinc-900">
+                  Vista rápida
+                </p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span
@@ -934,14 +1055,19 @@ export default async function CuentaPage() {
           </div>
         ) : (
           <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
-            <h3 className="text-xl font-semibold text-violet-900">
+            <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700">
+              Premium
+            </div>
+
+            <h3 className="mt-4 text-xl font-semibold text-violet-900">
               Personalización Premium
             </h3>
             <p className="mt-2 text-sm text-violet-800">
               En Premium podrás personalizar la reserva pública con color de
               marca, mensaje del negocio y logo público para ofrecer una imagen
-              más cuidada.
+              más cuidada y profesional.
             </p>
+
             <div className="mt-4">
               <Link
                 href="/cuenta/planes"
