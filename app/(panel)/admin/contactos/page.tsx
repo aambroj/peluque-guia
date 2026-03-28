@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getServerBusinessContext } from "@/lib/supabase-server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -62,6 +63,30 @@ function getStatusClasses(value: string | null | undefined) {
   return "border-sky-200 bg-sky-50 text-sky-700";
 }
 
+function getActionButtonClasses(params: {
+  currentStatus: string | null | undefined;
+  targetStatus: "new" | "pending" | "done";
+}) {
+  const current = (params.currentStatus ?? "new").trim().toLowerCase();
+  const active = current === params.targetStatus;
+
+  if (params.targetStatus === "done") {
+    return active
+      ? "border-emerald-900 bg-emerald-900 text-white"
+      : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100";
+  }
+
+  if (params.targetStatus === "pending") {
+    return active
+      ? "border-amber-900 bg-amber-900 text-white"
+      : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100";
+  }
+
+  return active
+    ? "border-sky-900 bg-sky-900 text-white"
+    : "border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100";
+}
+
 export default async function AdminContactosPage() {
   const { user } = await getServerBusinessContext();
 
@@ -73,6 +98,43 @@ export default async function AdminContactosPage() {
 
   if (!CONTACT_ADMIN_EMAILS.includes(userEmail)) {
     redirect("/dashboard");
+  }
+
+  async function updateContactRequestStatus(formData: FormData) {
+    "use server";
+
+    const { user: actionUser } = await getServerBusinessContext();
+
+    if (!actionUser) {
+      redirect("/login?redirectTo=/admin/contactos");
+    }
+
+    const actionUserEmail = actionUser.email?.trim().toLowerCase() ?? "";
+
+    if (!CONTACT_ADMIN_EMAILS.includes(actionUserEmail)) {
+      redirect("/dashboard");
+    }
+
+    const rawId = String(formData.get("id") ?? "");
+    const rawStatus = String(formData.get("status") ?? "").trim().toLowerCase();
+
+    const id = Number(rawId);
+    const allowedStatuses = new Set(["new", "pending", "done"]);
+
+    if (!Number.isFinite(id) || id <= 0 || !allowedStatuses.has(rawStatus)) {
+      revalidatePath("/admin/contactos");
+      return;
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    await supabaseAdmin
+      .from("contact_requests")
+      .update({ status: rawStatus })
+      .eq("id", id);
+
+    revalidatePath("/admin/contactos");
+    revalidatePath("/dashboard");
   }
 
   const supabaseAdmin = getSupabaseAdmin();
@@ -255,6 +317,62 @@ export default async function AdminContactosPage() {
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-700">
                     {item.message}
                   </p>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    Estado y seguimiento
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <form action={updateContactRequestStatus}>
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="status" value="new" />
+                      <button
+                        type="submit"
+                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
+                          {
+                            currentStatus: item.status,
+                            targetStatus: "new",
+                          }
+                        )}`}
+                      >
+                        Marcar como nueva
+                      </button>
+                    </form>
+
+                    <form action={updateContactRequestStatus}>
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="status" value="pending" />
+                      <button
+                        type="submit"
+                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
+                          {
+                            currentStatus: item.status,
+                            targetStatus: "pending",
+                          }
+                        )}`}
+                      >
+                        Marcar como pendiente
+                      </button>
+                    </form>
+
+                    <form action={updateContactRequestStatus}>
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="status" value="done" />
+                      <button
+                        type="submit"
+                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
+                          {
+                            currentStatus: item.status,
+                            targetStatus: "done",
+                          }
+                        )}`}
+                      >
+                        Marcar como atendida
+                      </button>
+                    </form>
+                  </div>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
