@@ -482,6 +482,13 @@ export default async function AdminContactosPage({
                     >
                       Responder por email
                     </a>
+
+                    <Link
+                      href={`/admin/contactos/${item.id}`}
+                      className="rounded-2xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                    >
+                      Ver detalle
+                    </Link>
                   </div>
                 </div>
 
