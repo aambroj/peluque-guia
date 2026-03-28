@@ -68,16 +68,22 @@ function toIsoDateTime(value: unknown): string | null {
   return new Date(unixSeconds * 1000).toISOString();
 }
 
+function getBasePlanPriceIds() {
+  return {
+    basic: process.env.STRIPE_PRICE_BASIC_MONTHLY ?? null,
+    pro: process.env.STRIPE_PRICE_PRO_MONTHLY ?? null,
+    premium: process.env.STRIPE_PRICE_PREMIUM_MONTHLY ?? null,
+  };
+}
+
 function mapPriceIdToPlan(priceId: string | null | undefined): PlanKey | null {
   if (!priceId) return null;
 
-  const basicPriceId = process.env.STRIPE_PRICE_BASIC_MONTHLY;
-  const proPriceId = process.env.STRIPE_PRICE_PRO_MONTHLY;
-  const premiumPriceId = process.env.STRIPE_PRICE_PREMIUM_MONTHLY;
+  const priceIds = getBasePlanPriceIds();
 
-  if (priceId === basicPriceId) return "basic";
-  if (priceId === proPriceId) return "pro";
-  if (priceId === premiumPriceId) return "premium";
+  if (priceId === priceIds.basic) return "basic";
+  if (priceId === priceIds.pro) return "pro";
+  if (priceId === priceIds.premium) return "premium";
 
   return null;
 }
@@ -131,6 +137,21 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   }
 
   return null;
+}
+
+function getBasePlanItem(
+  subscription: Stripe.Subscription
+): Stripe.SubscriptionItem | null {
+  const items = subscription.items.data ?? [];
+
+  for (const item of items) {
+    const priceId = item.price?.id ?? null;
+    if (mapPriceIdToPlan(priceId)) {
+      return item;
+    }
+  }
+
+  return items[0] ?? null;
 }
 
 async function updateSubscriptionRow(params: {
@@ -257,8 +278,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 }
 
 async function handleSubscriptionUpsert(subscription: Stripe.Subscription) {
-  const firstItem = subscription.items.data[0];
-  const stripePriceId = firstItem?.price?.id ?? null;
+  const basePlanItem = getBasePlanItem(subscription);
+  const stripePriceId = basePlanItem?.price?.id ?? null;
 
   const planFromPrice = mapPriceIdToPlan(stripePriceId);
   const planFromMetadata = subscription.metadata?.target_plan ?? null;
@@ -279,8 +300,8 @@ async function handleSubscriptionUpsert(subscription: Stripe.Subscription) {
     status: localStatus,
     plan,
     employeeLimit,
-    currentPeriodStart: toIsoDateTime(firstItem?.current_period_start),
-    currentPeriodEnd: toIsoDateTime(firstItem?.current_period_end),
+    currentPeriodStart: toIsoDateTime(basePlanItem?.current_period_start),
+    currentPeriodEnd: toIsoDateTime(basePlanItem?.current_period_end),
     trialEnd: toIsoDateTime(subscription.trial_end),
     cancelAt: toIsoDateTime(subscription.cancel_at),
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
@@ -288,8 +309,8 @@ async function handleSubscriptionUpsert(subscription: Stripe.Subscription) {
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  const firstItem = subscription.items.data[0];
-  const stripePriceId = firstItem?.price?.id ?? null;
+  const basePlanItem = getBasePlanItem(subscription);
+  const stripePriceId = basePlanItem?.price?.id ?? null;
 
   const planFromPrice = mapPriceIdToPlan(stripePriceId);
   const planFromMetadata = subscription.metadata?.target_plan ?? null;
@@ -309,8 +330,8 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     status: "canceled",
     plan,
     employeeLimit,
-    currentPeriodStart: toIsoDateTime(firstItem?.current_period_start),
-    currentPeriodEnd: toIsoDateTime(firstItem?.current_period_end),
+    currentPeriodStart: toIsoDateTime(basePlanItem?.current_period_start),
+    currentPeriodEnd: toIsoDateTime(basePlanItem?.current_period_end),
     trialEnd: toIsoDateTime(subscription.trial_end),
     cancelAt: toIsoDateTime(subscription.cancel_at),
     cancelAtPeriodEnd: subscription.cancel_at_period_end,

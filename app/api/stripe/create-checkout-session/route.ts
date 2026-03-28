@@ -17,6 +17,11 @@ type PlanConfig = {
   trialDays?: number;
 };
 
+type EmployeeRow = {
+  id: number;
+  status: string | null;
+};
+
 const PLAN_CONFIG: Record<PlanKey, PlanConfig> = {
   basic: {
     priceEnvName: "STRIPE_PRICE_BASIC_MONTHLY",
@@ -32,6 +37,8 @@ const PLAN_CONFIG: Record<PlanKey, PlanConfig> = {
     employeeLimit: 10,
   },
 };
+
+const EXTRA_EMPLOYEE_PRICE_ENV = "STRIPE_PRICE_EXTRA_EMPLOYEE_MONTHLY";
 
 function normalizeText(value: string) {
   return value
@@ -91,6 +98,28 @@ function isManagedSubscriptionStatus(status: string | null | undefined) {
   ].includes(normalized);
 }
 
+function isEmployeeActiveStatus(status: string | null | undefined) {
+  return normalizeText(status ?? "") !== "inactivo";
+}
+
+function buildPlanCapacityError(params: {
+  targetPlan: PlanKey;
+  employeeLimit: number;
+  activeEmployees: number;
+}) {
+  const { targetPlan, employeeLimit, activeEmployees } = params;
+
+  if (targetPlan === "basic") {
+    return `No puedes contratar Basic con ${activeEmployees} empleados activos. Basic permite hasta ${employeeLimit}.`;
+  }
+
+  if (targetPlan === "pro") {
+    return `No puedes contratar Pro con ${activeEmployees} empleados activos. Pro permite hasta ${employeeLimit}.`;
+  }
+
+  return `No se puede contratar este plan con ${activeEmployees} empleados activos.`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateCheckoutSessionBody;
@@ -125,6 +154,7 @@ export async function POST(request: Request) {
     const [
       { data: business, error: businessError },
       { data: subscription, error: subscriptionError },
+      { data: employees, error: employeesError },
     ] = await Promise.all([
       supabaseAdmin
         .from("businesses")
@@ -139,6 +169,11 @@ export async function POST(request: Request) {
         )
         .eq("business_id", businessId)
         .maybeSingle(),
+
+      supabaseAdmin
+        .from("empleados")
+        .select("id, status")
+        .eq("business_id", businessId),
     ]);
 
     if (businessError) {
@@ -151,6 +186,13 @@ export async function POST(request: Request) {
     if (subscriptionError) {
       return NextResponse.json(
         { error: subscriptionError.message },
+        { status: 500 }
+      );
+    }
+
+    if (employeesError) {
+      return NextResponse.json(
+        { error: employeesError.message },
         { status: 500 }
       );
     }
@@ -184,6 +226,34 @@ export async function POST(request: Request) {
 
     const { priceId, employeeLimit, trialDays } = getPlanDetails(targetPlan);
 
+    const activeEmployees = (employees ?? []).filter((employee: EmployeeRow) =>
+      isEmployeeActiveStatus(employee.status)
+    ).length;
+
+    if (targetPlan !== "premium" && activeEmployees > employeeLimit) {
+      return NextResponse.json(
+        {
+          error: buildPlanCapacityError({
+            targetPlan,
+            employeeLimit,
+            activeEmployees,
+          }),
+        },
+        { status: 409 }
+      );
+    }
+
+    const extraEmployees =
+      targetPlan === "premium"
+        ? Math.max(activeEmployees - employeeLimit, 0)
+        : 0;
+
+    let extraEmployeePriceId: string | null = null;
+
+    if (extraEmployees > 0) {
+      extraEmployeePriceId = getRequiredEnv(EXTRA_EMPLOYEE_PRICE_ENV);
+    }
+
     let stripeCustomerId = subscription.stripe_customer_id ?? null;
 
     if (!stripeCustomerId) {
@@ -214,6 +284,20 @@ export async function POST(request: Request) {
       }
     }
 
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ];
+
+    if (extraEmployeePriceId && extraEmployees > 0) {
+      lineItems.push({
+        price: extraEmployeePriceId,
+        quantity: extraEmployees,
+      });
+    }
+
     const appUrl = getAppUrl();
 
     const session = await stripe.checkout.sessions.create({
@@ -223,18 +307,16 @@ export async function POST(request: Request) {
       success_url: `${appUrl}/cuenta?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/cuenta/planes?checkout=canceled`,
       allow_promotion_codes: true,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       metadata: {
         business_id: String(businessId),
         user_id: user.id,
         target_plan: targetPlan,
         target_price_id: priceId,
         employee_limit: String(employeeLimit),
+        active_employees: String(activeEmployees),
+        extra_employees: String(extraEmployees),
+        extra_employee_price_id: extraEmployeePriceId ?? "",
         trial_days: String(trialDays ?? 0),
       },
       subscription_data: {
@@ -244,6 +326,9 @@ export async function POST(request: Request) {
           target_plan: targetPlan,
           target_price_id: priceId,
           employee_limit: String(employeeLimit),
+          active_employees: String(activeEmployees),
+          extra_employees: String(extraEmployees),
+          extra_employee_price_id: extraEmployeePriceId ?? "",
           trial_days: String(trialDays ?? 0),
         },
         ...(trialDays ? { trial_period_days: trialDays } : {}),

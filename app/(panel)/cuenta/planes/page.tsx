@@ -7,17 +7,19 @@ type PlanKey = "basic" | "pro" | "premium";
 
 type PlanDefinition = {
   key: PlanKey;
-  label: string;
+  badge: string;
   title: string;
   priceLabel: string;
   subtitle?: string;
   employeesLabel: string;
   description: string;
   features: string[];
+  highlight?: string;
   cardClassName: string;
-  labelClassName: string;
+  badgeClassName: string;
   titleClassName: string;
   textClassName: string;
+  buttonClassName?: string;
 };
 
 const PLAN_ORDER: Record<PlanKey, number> = {
@@ -29,59 +31,61 @@ const PLAN_ORDER: Record<PlanKey, number> = {
 const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     key: "basic",
-    label: "Basic",
+    badge: "Basic",
     title: "Empezar",
     priceLabel: "19 €/mes",
     subtitle: "30 días gratis y después 19 €/mes",
-    employeesLabel: "1 a 2 empleados",
-    description: "Ideal para una peluquería que empieza con la gestión digital.",
+    employeesLabel: "Hasta 2 empleados activos",
+    description:
+      "Pensado para salones pequeños que quieren empezar a trabajar con una gestión clara, moderna y profesional.",
     features: [
-      "Gestión de clientes",
-      "Agenda y reservas",
+      "Clientes y agenda",
       "Servicios y empleados",
-      "Reserva pública",
+      "Reserva pública online",
+      "Base sólida para organizar el día a día",
     ],
     cardClassName: "border-zinc-200 bg-white",
-    labelClassName: "text-zinc-500",
+    badgeClassName: "border-zinc-200 bg-zinc-50 text-zinc-700",
     titleClassName: "text-zinc-900",
     textClassName: "text-zinc-700",
   },
   {
     key: "pro",
-    label: "Pro",
+    badge: "Pro",
     title: "Crecer",
     priceLabel: "39 €/mes",
-    employeesLabel: "3 a 5 empleados",
+    employeesLabel: "Hasta 5 empleados activos",
     description:
-      "Preparado para negocios con más volumen y funciones avanzadas.",
+      "Preparado para peluquerías con más movimiento, más equipo y necesidad de una gestión más completa.",
     features: [
       "Todo lo de Basic",
-      "Métricas avanzadas",
-      "Más automatizaciones",
-      "Base para facturación",
+      "Más capacidad para equipo",
+      "Métricas y operativa más avanzadas",
+      "Mejor base para crecer con orden",
     ],
     cardClassName: "border-sky-200 bg-sky-50",
-    labelClassName: "text-sky-700",
-    titleClassName: "text-sky-900",
+    badgeClassName: "border-sky-200 bg-white text-sky-700",
+    titleClassName: "text-sky-950",
     textClassName: "text-sky-900",
   },
   {
     key: "premium",
-    label: "Premium",
+    badge: "Premium",
     title: "Escalar",
     priceLabel: "69 €/mes",
-    employeesLabel: "6 a 10 empleados",
+    employeesLabel: "Hasta 10 empleados activos",
     description:
-      "Pensado para una operativa más completa y una gestión más potente.",
+      "La opción más completa para negocios con una operativa más potente, una imagen más cuidada y margen real para escalar.",
     features: [
       "Todo lo de Pro",
-      "Funciones avanzadas SaaS",
-      "Mayor personalización",
-      "Preparado para futuras integraciones",
+      "Personalización Premium",
+      "Mayor capacidad operativa",
+      "Preparado para integraciones y crecimiento",
     ],
+    highlight: "Desde el empleado 11 se añade un suplemento mensual por empleado activo extra.",
     cardClassName: "border-violet-200 bg-violet-50",
-    labelClassName: "text-violet-700",
-    titleClassName: "text-violet-900",
+    badgeClassName: "border-violet-200 bg-white text-violet-700",
+    titleClassName: "text-violet-950",
     textClassName: "text-violet-900",
   },
 ];
@@ -143,6 +147,42 @@ function isManagedSubscriptionStatus(status: string | null | undefined) {
   ].includes(normalized);
 }
 
+function getStatusClasses(status: string | null | undefined) {
+  const normalized = normalizeText(status ?? "");
+
+  if (normalized === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (normalized === "trialing") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  if (
+    normalized === "past_due" ||
+    normalized === "unpaid" ||
+    normalized === "incomplete"
+  ) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (normalized === "canceled") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+
+  if (normalized === "paused") {
+    return "border-zinc-300 bg-zinc-100 text-zinc-700";
+  }
+
+  return "border-zinc-200 bg-zinc-50 text-zinc-700";
+}
+
+function getActionLabel(planKey: PlanKey) {
+  if (planKey === "basic") return "Empezar con Basic";
+  if (planKey === "pro") return "Pasar a Pro";
+  return "Pasar a Premium";
+}
+
 export default async function PlanesPage() {
   const { supabase, user, businessId } = await getServerBusinessContext();
 
@@ -156,7 +196,7 @@ export default async function PlanesPage() {
 
   const { data: subscription } = await supabase
     .from("subscriptions")
-    .select("plan, status")
+    .select("plan, status, employee_limit")
     .eq("business_id", businessId)
     .maybeSingle();
 
@@ -168,40 +208,104 @@ export default async function PlanesPage() {
   return (
     <section className="px-6 py-8">
       <div className="mx-auto max-w-6xl space-y-8">
-        <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600">
-                Planes SaaS
+        <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
+          <div className="border-b border-zinc-200 bg-gradient-to-r from-white via-zinc-50 to-white p-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
+                  Planes SaaS
+                </div>
+
+                <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
+                  Elige el plan que encaja con tu equipo
+                </h2>
+
+                <p className="mt-3 text-zinc-600">
+                  Compara planes, capacidad incluida y evolución del precio para
+                  que tu peluquería pueda crecer con una estructura clara.
+                </p>
               </div>
 
-              <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
-                Mejorar plan
-              </h2>
+              <Link
+                href="/cuenta"
+                className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+              >
+                Volver a cuenta
+              </Link>
+            </div>
+          </div>
 
-              <p className="mt-2 text-zinc-600">
-                Aquí podrás comparar planes y elegir el que mejor encaje con tu
-                peluquería.
+          <div className="grid gap-4 p-6 md:grid-cols-3">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <p className="text-sm text-zinc-500">Plan actual</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {currentPlan}
               </p>
             </div>
 
-            <Link
-              href="/cuenta"
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Volver a cuenta
-            </Link>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <p className="text-sm text-zinc-500">Estado</p>
+              <div className="mt-2">
+                <span
+                  className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getStatusClasses(
+                    subscription?.status
+                  )}`}
+                >
+                  {currentStatus}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <p className="text-sm text-zinc-500">Capacidad actual</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                {typeof subscription?.employee_limit === "number" &&
+                subscription.employee_limit > 0
+                  ? `${subscription.employee_limit} empleados`
+                  : "Según tu plan"}
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-zinc-500">Plan actual</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
-            {currentPlan}
-          </p>
-          <p className="mt-2 text-sm text-zinc-600">
-            Estado de suscripción: {currentStatus}
-          </p>
+          <h3 className="text-xl font-semibold text-zinc-900">
+            Cómo crecerá el precio según tu equipo
+          </h3>
+          <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-sm font-medium text-zinc-500">Basic</p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                Hasta 2 empleados
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+              <p className="text-sm font-medium text-sky-700">Pro</p>
+              <p className="mt-2 text-lg font-semibold text-sky-950">
+                Hasta 5 empleados
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+              <p className="text-sm font-medium text-violet-700">Premium</p>
+              <p className="mt-2 text-lg font-semibold text-violet-950">
+                Hasta 10 empleados
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-700">
+                Equipo adicional
+              </p>
+              <p className="mt-2 text-lg font-semibold text-amber-950">
+                Desde el 11
+              </p>
+              <p className="mt-2 text-sm text-amber-800">
+                Suplemento mensual por cada empleado activo extra.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
@@ -224,11 +328,13 @@ export default async function PlanesPage() {
                 key={plan.key}
                 className={`rounded-3xl border p-6 shadow-sm ${plan.cardClassName}`}
               >
-                <p className={`text-sm font-medium ${plan.labelClassName}`}>
-                  {plan.label}
-                </p>
+                <div
+                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${plan.badgeClassName}`}
+                >
+                  {plan.badge}
+                </div>
 
-                <h3 className={`mt-2 text-2xl font-bold ${plan.titleClassName}`}>
+                <h3 className={`mt-4 text-2xl font-bold ${plan.titleClassName}`}>
                   {plan.title}
                 </h3>
 
@@ -248,15 +354,29 @@ export default async function PlanesPage() {
                   </p>
                 </div>
 
-                <p className={`mt-4 text-sm ${plan.textClassName}`}>
+                <p className={`mt-4 text-sm leading-7 ${plan.textClassName}`}>
                   {plan.description}
                 </p>
 
                 <ul className={`mt-5 space-y-2 text-sm ${plan.textClassName}`}>
                   {plan.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
+                    <li key={feature} className="flex gap-2">
+                      <span>•</span>
+                      <span>{feature}</span>
+                    </li>
                   ))}
                 </ul>
+
+                {plan.highlight ? (
+                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-medium text-amber-900">
+                      Escalado del plan
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-amber-800">
+                      {plan.highlight}
+                    </p>
+                  </div>
+                ) : null}
 
                 <div className="mt-6">
                   {isCurrentPlan ? (
@@ -272,9 +392,7 @@ export default async function PlanesPage() {
                       plan={plan.key}
                       className="w-full rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                     >
-                      {plan.key === "basic"
-                        ? "Empezar con Basic"
-                        : `Pasar a ${plan.label}`}
+                      {getActionLabel(plan.key)}
                     </StripeCheckoutButton>
                   ) : (
                     <div className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-5 py-3 text-center text-sm font-medium text-zinc-600">
@@ -287,14 +405,48 @@ export default async function PlanesPage() {
           })}
         </div>
 
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-emerald-900">
+              Método de cobro pensado para crecer
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-emerald-800">
+              La idea es mantener un precio base claro por plan y, en Premium,
+              ampliar capacidad cuando el salón supere los 10 empleados activos.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-zinc-900">
+              Métodos de pago
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-zinc-600">
+              El objetivo es aceptar tarjeta y wallets modernas desde Stripe
+              Checkout, y después ampliar con métodos adicionales según
+              disponibilidad.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {["Tarjeta", "Apple Pay", "Google Pay", "PayPal"].map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
           <h3 className="text-xl font-semibold text-amber-900">
-            Próximamente
+            Siguiente fase
           </h3>
-          <p className="mt-2 text-sm text-amber-800">
-            En una siguiente fase aquí conectaremos downgrade, cambio de plan
-            desde Customer Portal y una gestión más fina de límites por número
-            de empleados.
+          <p className="mt-2 text-sm leading-7 text-amber-800">
+            Lo siguiente será conectar esta pantalla con Stripe para que Premium
+            pueda añadir automáticamente el suplemento mensual por empleado
+            activo extra a partir del 11.
           </p>
         </div>
       </div>
