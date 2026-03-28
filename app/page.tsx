@@ -151,6 +151,27 @@ const faqs = [
   },
 ];
 
+const testimonials = [
+  {
+    quote:
+      "Ahora tengo las reservas, los clientes y el equipo mucho más ordenados. Se nota incluso en la atención diaria.",
+    author: "Salón pequeño",
+    role: "Uso orientativo de presentación",
+  },
+  {
+    quote:
+      "La reserva online da una imagen mucho más seria y evita muchas llamadas para huecos y cambios de cita.",
+    author: "Negocio en crecimiento",
+    role: "Uso orientativo de presentación",
+  },
+  {
+    quote:
+      "Lo que más valoro es tener horarios, servicios y agenda en el mismo sitio, sin depender de notas o mensajes.",
+    author: "Equipo con varias personas",
+    role: "Uso orientativo de presentación",
+  },
+];
+
 function getPlanClasses(tone: string) {
   if (tone === "sky") {
     return {
@@ -274,12 +295,12 @@ export default function HomePage() {
                 Ver planes
               </a>
 
-              <Link
-                href="/login"
+              <a
+                href="mailto:alber.ambroj@gmail.com?subject=Solicitud%20de%20demo%20-%20Peluque-Gu%C3%ADa"
                 className="rounded-2xl border border-zinc-300 bg-white px-6 py-3.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
               >
-                Ya tengo cuenta
-              </Link>
+                Solicitar demo
+              </a>
             </div>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -441,6 +462,79 @@ export default function HomePage() {
                 </p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-zinc-50">
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-[2rem] border border-zinc-200 bg-white p-8 shadow-sm">
+              <p className="text-sm font-medium text-zinc-500">
+                Por qué puede encajar contigo
+              </p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
+                Menos improvisación y más control del salón
+              </h2>
+              <p className="mt-4 text-base leading-7 text-zinc-600">
+                Está orientado a peluquerías que quieren trabajar con una agenda
+                más clara, una operativa más ordenada y una imagen más seria de
+                cara al cliente.
+              </p>
+
+              <div className="mt-6 grid gap-4">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Para peluquerías pequeñas
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    Empieza con una base sencilla, clara y profesional.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Para equipos con más movimiento
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    Gana visibilidad sobre el equipo, horarios y carga de
+                    trabajo.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Para negocios que quieren crecer
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    Mejora la imagen del salón y prepara una operativa más
+                    sólida para el futuro.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-3">
+              {testimonials.map((testimonial) => (
+                <div
+                  key={testimonial.quote}
+                  className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-sm"
+                >
+                  <p className="text-3xl leading-none text-zinc-300">“</p>
+                  <p className="mt-3 text-sm leading-7 text-zinc-700">
+                    {testimonial.quote}
+                  </p>
+                  <div className="mt-6 border-t border-zinc-200 pt-4">
+                    <p className="text-sm font-semibold text-zinc-900">
+                      {testimonial.author}
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500">
+                      {testimonial.role}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -673,7 +767,25 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
+          <div className="mt-8 grid gap-5 lg:grid-cols-3">
+            <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
+              <p className="text-sm font-semibold text-zinc-900">
+                Solicita una demo o más información
+              </p>
+              <p className="mt-3 text-sm leading-7 text-zinc-600">
+                Si quieres valorar si encaja con tu salón, puedes escribir
+                directamente y ver el producto con más detalle.
+              </p>
+              <div className="mt-4">
+                <a
+                  href="mailto:alber.ambroj@gmail.com?subject=Quiero%20una%20demo%20de%20Peluque-Gu%C3%ADa"
+                  className="inline-flex rounded-2xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  Pedir demo
+                </a>
+              </div>
+            </div>
+
             <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
               <p className="text-sm font-semibold text-zinc-900">
                 Soporte y contacto
@@ -695,17 +807,6 @@ export default function HomePage() {
                   aambroj@yahoo.es
                 </a>
               </div>
-            </div>
-
-            <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
-              <p className="text-sm font-semibold text-zinc-900">
-                Enfoque del producto
-              </p>
-              <p className="mt-3 text-sm leading-7 text-zinc-600">
-                Peluque-Guía está orientado a peluquerías que quieren trabajar
-                con más orden, dar mejor imagen y facilitar la reserva online a
-                sus clientes.
-              </p>
             </div>
 
             <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
@@ -735,6 +836,37 @@ export default function HomePage() {
                 >
                   Política de cookies
                 </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
+            <div className="grid gap-5 md:grid-cols-3">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <p className="text-sm font-medium text-zinc-500">
+                  Ideal para empezar
+                </p>
+                <p className="mt-2 text-lg font-semibold text-zinc-900">
+                  Basic con 30 días gratis
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <p className="text-sm font-medium text-zinc-500">
+                  Mejor imagen del salón
+                </p>
+                <p className="mt-2 text-lg font-semibold text-zinc-900">
+                  Reserva online más profesional
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <p className="text-sm font-medium text-zinc-500">
+                  Preparado para crecer
+                </p>
+                <p className="mt-2 text-lg font-semibold text-zinc-900">
+                  Planes según tu equipo
+                </p>
               </div>
             </div>
           </div>
