@@ -60,6 +60,13 @@ const highlights = [
   "Dashboard del negocio",
 ];
 
+const trustPoints = [
+  "Sin instalación",
+  "Acceso desde cualquier dispositivo",
+  "Configuración sencilla",
+  "Imagen más profesional para tu salón",
+];
+
 const plans = [
   {
     name: "Basic",
@@ -111,6 +118,39 @@ const plans = [
   },
 ];
 
+const faqs = [
+  {
+    question: "¿Necesito instalar algo en el ordenador?",
+    answer:
+      "No. Peluque-Guía funciona como software web, así que puedes acceder desde el navegador sin instalaciones complicadas.",
+  },
+  {
+    question: "¿Puedo usarlo aunque tenga un salón pequeño?",
+    answer:
+      "Sí. El plan Basic está pensado precisamente para peluquerías pequeñas que quieren ordenar su agenda, sus clientes y su operativa diaria.",
+  },
+  {
+    question: "¿Mis clientes pueden reservar online?",
+    answer:
+      "Sí. Puedes compartir tu enlace público de reservas para que tus clientes pidan cita de forma más cómoda y con una imagen más profesional.",
+  },
+  {
+    question: "¿Puedo gestionar horarios, bloqueos y vacaciones del equipo?",
+    answer:
+      "Sí. La herramienta está preparada para organizar horarios semanales, descansos, bloqueos y periodos de ausencia de cada empleado.",
+  },
+  {
+    question: "¿Qué pasa si mi negocio crece?",
+    answer:
+      "Puedes pasar a un plan superior según el número de empleados activos y la evolución de tu salón.",
+  },
+  {
+    question: "¿Hay un periodo de prueba?",
+    answer:
+      "Sí. El plan Basic está planteado con 30 días gratis antes del cobro mensual.",
+  },
+];
+
 function getPlanClasses(tone: string) {
   if (tone === "sky") {
     return {
@@ -118,6 +158,7 @@ function getPlanClasses(tone: string) {
       badge: "border-sky-200 bg-white text-sky-700",
       title: "text-sky-950",
       text: "text-sky-900",
+      button: "bg-sky-900 text-white hover:bg-sky-950",
     };
   }
 
@@ -127,6 +168,7 @@ function getPlanClasses(tone: string) {
       badge: "border-violet-200 bg-white text-violet-700",
       title: "text-violet-950",
       text: "text-violet-900",
+      button: "bg-violet-900 text-white hover:bg-violet-950",
     };
   }
 
@@ -135,6 +177,7 @@ function getPlanClasses(tone: string) {
     badge: "border-zinc-200 bg-zinc-50 text-zinc-700",
     title: "text-zinc-900",
     text: "text-zinc-700",
+    button: "bg-black text-white hover:opacity-90",
   };
 }
 
@@ -150,6 +193,33 @@ export default function HomePage() {
             <p className="text-sm text-zinc-500">
               Software web para peluquerías
             </p>
+          </div>
+
+          <div className="hidden items-center gap-6 md:flex">
+            <a
+              href="#funciones"
+              className="text-sm font-medium text-zinc-600 transition hover:text-black"
+            >
+              Funciones
+            </a>
+            <a
+              href="#planes"
+              className="text-sm font-medium text-zinc-600 transition hover:text-black"
+            >
+              Planes
+            </a>
+            <a
+              href="#faq"
+              className="text-sm font-medium text-zinc-600 transition hover:text-black"
+            >
+              FAQ
+            </a>
+            <a
+              href="#contacto"
+              className="text-sm font-medium text-zinc-600 transition hover:text-black"
+            >
+              Contacto
+            </a>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -197,12 +267,12 @@ export default function HomePage() {
                 Crear mi negocio
               </Link>
 
-              <Link
-                href="/cuenta/planes"
+              <a
+                href="#planes"
                 className="rounded-2xl border border-zinc-300 bg-white px-6 py-3.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
               >
                 Ver planes
-              </Link>
+              </a>
 
               <Link
                 href="/login"
@@ -217,6 +287,17 @@ export default function HomePage() {
                 <div
                   key={item}
                   className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 shadow-sm"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {trustPoints.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-700"
                 >
                   {item}
                 </div>
@@ -299,6 +380,39 @@ export default function HomePage() {
       </section>
 
       <section className="border-y border-zinc-200 bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-6 lg:px-8">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+              <p className="text-sm font-medium text-zinc-500">
+                Más orden interno
+              </p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                Centraliza reservas, clientes y equipo
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+              <p className="text-sm font-medium text-zinc-500">
+                Mejor imagen
+              </p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                Ofrece una reserva online más seria y profesional
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+              <p className="text-sm font-medium text-zinc-500">
+                Preparado para crecer
+              </p>
+              <p className="mt-2 text-lg font-semibold text-zinc-900">
+                Planes claros según el tamaño de tu negocio
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="funciones" className="border-y border-zinc-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-zinc-500">
@@ -331,7 +445,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="bg-zinc-50">
+      <section id="planes" className="bg-zinc-50">
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-zinc-500">
@@ -404,6 +518,15 @@ export default function HomePage() {
                       </p>
                     </div>
                   ) : null}
+
+                  <div className="mt-6">
+                    <Link
+                      href="/registro"
+                      className={`inline-flex rounded-2xl px-5 py-3 text-sm font-medium transition ${styles.button}`}
+                    >
+                      Empezar con {plan.name}
+                    </Link>
+                  </div>
                 </div>
               );
             })}
@@ -483,7 +606,40 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="bg-white">
+      <section id="faq" className="bg-zinc-50">
+        <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="text-sm font-medium text-zinc-500">
+              Preguntas frecuentes
+            </p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
+              Respuestas claras antes de empezar
+            </h2>
+            <p className="mt-4 text-base leading-7 text-zinc-600">
+              Aquí tienes algunas dudas habituales sobre el producto, los planes
+              y la forma de trabajo.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-5 lg:grid-cols-2">
+            {faqs.map((faq) => (
+              <div
+                key={faq.question}
+                className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
+              >
+                <h3 className="text-lg font-semibold text-zinc-900">
+                  {faq.question}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-zinc-600">
+                  {faq.answer}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="contacto" className="bg-white">
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="rounded-[2rem] border border-zinc-200 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-8 text-white sm:p-10">
             <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -507,12 +663,12 @@ export default function HomePage() {
                 >
                   Crear negocio
                 </Link>
-                <Link
-                  href="/login"
+                <a
+                  href="mailto:alber.ambroj@gmail.com?subject=Solicitud%20de%20demo%20-%20Peluque-Gu%C3%ADa"
                   className="rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/15"
                 >
-                  Entrar
-                </Link>
+                  Solicitar demo
+                </a>
               </div>
             </div>
           </div>

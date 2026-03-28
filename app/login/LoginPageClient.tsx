@@ -1,13 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
+function getSafeRedirect(value: string | null) {
+  if (!value) return "/dashboard";
+  if (!value.startsWith("/")) return "/dashboard";
+  if (value.startsWith("//")) return "/dashboard";
+  return value;
+}
+
+function getFriendlyErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("invalid login credentials") ||
+    normalized.includes("invalid credentials")
+  ) {
+    return "Email o contraseña incorrectos.";
+  }
+
+  if (normalized.includes("email not confirmed")) {
+    return "Tu email todavía no está confirmado.";
+  }
+
+  return message || "No se pudo iniciar sesión. Inténtalo de nuevo.";
+}
+
 export default function LoginPageClient() {
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
+  const redirectTo = useMemo(
+    () => getSafeRedirect(searchParams.get("redirectTo")),
+    [searchParams]
+  );
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +52,7 @@ export default function LoginPageClient() {
     });
 
     if (error) {
-      setErrorMessage(error.message);
+      setErrorMessage(getFriendlyErrorMessage(error.message));
       setLoading(false);
       return;
     }
@@ -46,13 +73,13 @@ export default function LoginPageClient() {
               </div>
 
               <h1 className="mt-6 max-w-3xl text-5xl font-bold leading-tight tracking-tight">
-                Tu salón más ordenado, más profesional y más fácil de gestionar.
+                Accede a tu panel y gestiona tu salón con más orden.
               </h1>
 
               <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-300">
                 Controla citas, clientes, equipo, servicios y reservas online
                 desde un solo panel. Una herramienta pensada para trabajar mejor
-                hoy y crecer con una imagen sólida mañana.
+                hoy y dar una imagen más profesional mañana.
               </p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -62,37 +89,37 @@ export default function LoginPageClient() {
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
                     Organiza reservas, cambios, estados y disponibilidad sin
-                    perder tiempo entre papeles o mensajes.
+                    depender de papeles, llamadas o mensajes sueltos.
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
                   <p className="text-sm font-semibold text-white">
-                    Equipo y servicios controlados
+                    Equipo y servicios bajo control
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
                     Gestiona empleados, horarios, bloqueos, precios y duración
-                    de cada servicio desde el panel.
+                    de cada servicio desde una sola herramienta.
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
                   <p className="text-sm font-semibold text-white">
-                    Reservas online para clientes
+                    Reserva online para clientes
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Comparte tu enlace público y deja que tus clientes reserven
-                    online de forma cómoda y directa.
+                    Comparte tu enlace público y permite que tus clientes
+                    reserven de forma cómoda, directa y profesional.
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
                   <p className="text-sm font-semibold text-white">
-                    Base sólida para crecer
+                    Base preparada para crecer
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Estructura moderna, multi-negocio y preparada para una
-                    evolución comercial real.
+                    Estructura moderna y preparada para acompañar la evolución
+                    comercial de tu negocio.
                   </p>
                 </div>
               </div>
@@ -104,8 +131,8 @@ export default function LoginPageClient() {
                   Pensado para el día a día
                 </p>
                 <p className="mt-2 text-sm leading-6 text-zinc-300">
-                  Menos tiempo organizando citas y más tiempo atendiendo mejor a
-                  tus clientes.
+                  Menos tiempo organizando la agenda y más tiempo atendiendo
+                  mejor a tus clientes.
                 </p>
               </div>
 
@@ -136,8 +163,17 @@ export default function LoginPageClient() {
         <div className="flex items-center">
           <div className="w-full overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
             <div className="border-b border-zinc-200 bg-gradient-to-r from-white via-zinc-50 to-white px-8 py-8 sm:px-10">
-              <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
-                Acceso privado
+              <div className="flex items-center justify-between gap-4">
+                <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
+                  Acceso privado
+                </div>
+
+                <Link
+                  href="/"
+                  className="text-sm font-medium text-zinc-500 underline underline-offset-2 hover:text-black"
+                >
+                  Volver a la portada
+                </Link>
               </div>
 
               <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
@@ -178,12 +214,9 @@ export default function LoginPageClient() {
                 </div>
 
                 <div>
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="block text-sm font-medium text-zinc-700">
-                      Contraseña
-                    </label>
-                  </div>
-
+                  <label className="mb-2 block text-sm font-medium text-zinc-700">
+                    Contraseña
+                  </label>
                   <input
                     type="password"
                     value={password}
@@ -228,27 +261,14 @@ export default function LoginPageClient() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
-                  <p className="text-sm font-semibold text-zinc-900">
-                    Soporte y contacto
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-sm font-medium text-emerald-900">
+                    Empieza con más tranquilidad
                   </p>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    Alberto Ambroj López
+                  <p className="mt-1 text-sm text-emerald-800">
+                    El plan Basic está planteado con 30 días gratis antes del
+                    cobro mensual.
                   </p>
-                  <div className="mt-2 space-y-1 text-sm">
-                    <a
-                      href="mailto:alber.ambroj@gmail.com"
-                      className="block text-zinc-700 underline underline-offset-2 hover:text-black"
-                    >
-                      alber.ambroj@gmail.com
-                    </a>
-                    <a
-                      href="mailto:aambroj@yahoo.es"
-                      className="block text-zinc-700 underline underline-offset-2 hover:text-black"
-                    >
-                      aambroj@yahoo.es
-                    </a>
-                  </div>
                 </div>
               </div>
 
@@ -280,6 +300,29 @@ export default function LoginPageClient() {
                       Imagen y reservas online
                     </p>
                   </div>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
+                <p className="text-sm font-semibold text-zinc-900">
+                  Soporte y contacto
+                </p>
+                <p className="mt-2 text-sm text-zinc-600">
+                  Alberto Ambroj López
+                </p>
+                <div className="mt-2 space-y-1 text-sm">
+                  <a
+                    href="mailto:alber.ambroj@gmail.com"
+                    className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+                  >
+                    alber.ambroj@gmail.com
+                  </a>
+                  <a
+                    href="mailto:aambroj@yahoo.es"
+                    className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+                  >
+                    aambroj@yahoo.es
+                  </a>
                 </div>
               </div>
             </div>

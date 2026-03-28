@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+  "https://peluque-guia.vercel.app";
+
 function slugify(value: string) {
   return value
     .trim()
@@ -14,6 +18,24 @@ function slugify(value: string) {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function getFriendlyErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("already registered")) {
+    return "Ese email ya está registrado.";
+  }
+
+  if (normalized.includes("already exists")) {
+    return "Ya existe un negocio o identificador con esos datos.";
+  }
+
+  if (normalized.includes("slug")) {
+    return "Ese identificador del salón ya está en uso. Prueba con otro.";
+  }
+
+  return message || "No se pudo crear la cuenta.";
 }
 
 export default function RegistroPageClient() {
@@ -42,6 +64,7 @@ export default function RegistroPageClient() {
       !ownerName.trim() ||
       !email.trim() ||
       !password ||
+      !confirmPassword ||
       !finalSlug
     ) {
       setErrorMessage("Debes completar todos los campos.");
@@ -67,10 +90,10 @@ export default function RegistroPageClient() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          businessName,
-          ownerName,
+          businessName: businessName.trim(),
+          ownerName: ownerName.trim(),
           slug: finalSlug,
-          email,
+          email: email.trim(),
           password,
         }),
       });
@@ -85,7 +108,9 @@ export default function RegistroPageClient() {
       router.refresh();
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "No se pudo crear la cuenta."
+        getFriendlyErrorMessage(
+          error instanceof Error ? error.message : "No se pudo crear la cuenta."
+        )
       );
     } finally {
       setLoading(false);
@@ -121,7 +146,7 @@ export default function RegistroPageClient() {
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
                     Crea tu negocio y accede al panel en pocos pasos, sin
-                    complicaciones.
+                    instalaciones ni configuraciones complicadas.
                   </p>
                 </div>
 
@@ -131,7 +156,7 @@ export default function RegistroPageClient() {
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
                     Define el identificador de tu salón para que tus clientes
-                    puedan reservar online.
+                    puedan reservar online con una URL clara y profesional.
                   </p>
                 </div>
 
@@ -147,11 +172,11 @@ export default function RegistroPageClient() {
 
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
                   <p className="text-sm font-semibold text-white">
-                    Base preparada para crecer
+                    Preparado para crecer
                   </p>
                   <p className="mt-2 text-sm leading-6 text-zinc-300">
-                    Estructura moderna lista para suscripciones, multi-negocio y
-                    uso real por peluquerías.
+                    Estructura moderna lista para suscripciones, crecimiento del
+                    equipo y uso real por peluquerías.
                   </p>
                 </div>
               </div>
@@ -160,11 +185,11 @@ export default function RegistroPageClient() {
             <div className="relative mt-10 grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
                 <p className="text-sm font-semibold text-white">
-                  Pensado para negocio real
+                  Empieza con más tranquilidad
                 </p>
                 <p className="mt-2 text-sm leading-6 text-zinc-300">
-                  Menos tiempo organizando tareas y más tiempo atendiendo mejor
-                  a tus clientes.
+                  El plan Basic está planteado con 30 días gratis antes del
+                  cobro mensual.
                 </p>
               </div>
 
@@ -195,8 +220,17 @@ export default function RegistroPageClient() {
         <div className="flex items-center">
           <div className="w-full overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
             <div className="border-b border-zinc-200 bg-gradient-to-r from-white via-zinc-50 to-white px-8 py-8 sm:px-10">
-              <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
-                Nuevo salón
+              <div className="flex items-center justify-between gap-4">
+                <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
+                  Nuevo salón
+                </div>
+
+                <Link
+                  href="/"
+                  className="text-sm font-medium text-zinc-500 underline underline-offset-2 hover:text-black"
+                >
+                  Volver a la portada
+                </Link>
               </div>
 
               <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
@@ -204,8 +238,8 @@ export default function RegistroPageClient() {
               </h2>
 
               <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-600">
-                Registra tu peluquería y crea tu acceso al panel de gestión para
-                empezar a trabajar con una base profesional.
+                Registra tu peluquería y crea tu acceso al panel para empezar a
+                trabajar con una base más profesional y ordenada.
               </p>
             </div>
 
@@ -230,9 +264,11 @@ export default function RegistroPageClient() {
                     type="text"
                     value={businessName}
                     onChange={(event) => {
-                      setBusinessName(event.target.value);
+                      const nextValue = event.target.value;
+                      setBusinessName(nextValue);
+
                       if (!slug.trim()) {
-                        setSlug(slugify(event.target.value));
+                        setSlug(slugify(nextValue));
                       }
                     }}
                     required
@@ -268,7 +304,7 @@ export default function RegistroPageClient() {
                       , tus clientes accederán a:
                     </p>
                     <p className="mt-2 break-all rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800">
-                      https://peluque-guia.vercel.app/reservar/
+                      {APP_URL}/reservar/
                       <span className="font-semibold">
                         {finalPreviewSlug || "peluqueria-lola"}
                       </span>
@@ -320,6 +356,9 @@ export default function RegistroPageClient() {
                       className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
                       placeholder="••••••••"
                     />
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Mínimo 6 caracteres.
+                    </p>
                   </div>
 
                   <div>
@@ -370,27 +409,14 @@ export default function RegistroPageClient() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
-                    <p className="text-sm font-semibold text-zinc-900">
-                      Soporte y contacto
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-sm font-medium text-emerald-900">
+                      Empieza con 30 días gratis
                     </p>
-                    <p className="mt-2 text-sm text-zinc-600">
-                      Alberto Ambroj López
+                    <p className="mt-1 text-sm text-emerald-800">
+                      Ideal para probar la herramienta y configurar tu salón con
+                      tranquilidad.
                     </p>
-                    <div className="mt-2 space-y-1 text-sm">
-                      <a
-                        href="mailto:alber.ambroj@gmail.com"
-                        className="block text-zinc-700 underline underline-offset-2 hover:text-black"
-                      >
-                        alber.ambroj@gmail.com
-                      </a>
-                      <a
-                        href="mailto:aambroj@yahoo.es"
-                        className="block text-zinc-700 underline underline-offset-2 hover:text-black"
-                      >
-                        aambroj@yahoo.es
-                      </a>
-                    </div>
                   </div>
                 </div>
 
@@ -422,6 +448,29 @@ export default function RegistroPageClient() {
                         Base sólida para escalar
                       </p>
                     </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
+                  <p className="text-sm font-semibold text-zinc-900">
+                    Soporte y contacto
+                  </p>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Alberto Ambroj López
+                  </p>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <a
+                      href="mailto:alber.ambroj@gmail.com"
+                      className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+                    >
+                      alber.ambroj@gmail.com
+                    </a>
+                    <a
+                      href="mailto:aambroj@yahoo.es"
+                      className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+                    >
+                      aambroj@yahoo.es
+                    </a>
                   </div>
                 </div>
               </form>
