@@ -225,12 +225,20 @@ export default function RegistroPageClient() {
                   Nuevo salón
                 </div>
 
-                <Link
-                  href="/"
-                  className="text-sm font-medium text-zinc-500 underline underline-offset-2 hover:text-black"
-                >
-                  Volver a la portada
-                </Link>
+                <div className="flex items-center gap-4">
+                  <Link
+                    href="/contacto"
+                    className="text-sm font-medium text-zinc-500 underline underline-offset-2 hover:text-black"
+                  >
+                    Contacto
+                  </Link>
+                  <Link
+                    href="/"
+                    className="text-sm font-medium text-zinc-500 underline underline-offset-2 hover:text-black"
+                  >
+                    Volver a la portada
+                  </Link>
+                </div>
               </div>
 
               <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
@@ -451,26 +459,46 @@ export default function RegistroPageClient() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
-                  <p className="text-sm font-semibold text-zinc-900">
-                    Soporte y contacto
-                  </p>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    Alberto Ambroj López
-                  </p>
-                  <div className="mt-2 space-y-1 text-sm">
-                    <a
-                      href="mailto:alber.ambroj@gmail.com"
-                      className="block text-zinc-700 underline underline-offset-2 hover:text-black"
-                    >
-                      alber.ambroj@gmail.com
-                    </a>
-                    <a
-                      href="mailto:aambroj@yahoo.es"
-                      className="block text-zinc-700 underline underline-offset-2 hover:text-black"
-                    >
-                      aambroj@yahoo.es
-                    </a>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
+                    <p className="text-sm font-semibold text-zinc-900">
+                      Soporte y contacto
+                    </p>
+                    <p className="mt-2 text-sm text-zinc-600">
+                      Alberto Ambroj López
+                    </p>
+                    <div className="mt-2 space-y-1 text-sm">
+                      <a
+                        href="mailto:alber.ambroj@gmail.com"
+                        className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+                      >
+                        alber.ambroj@gmail.com
+                      </a>
+                      <a
+                        href="mailto:aambroj@yahoo.es"
+                        className="block text-zinc-700 underline underline-offset-2 hover:text-black"
+                      >
+                        aambroj@yahoo.es
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p className="text-sm font-semibold text-zinc-900">
+                      ¿Prefieres hablar antes?
+                    </p>
+                    <p className="mt-2 text-sm text-zinc-600">
+                      Puedes ir a la página de contacto y pedir una demo o más
+                      información antes de registrarte.
+                    </p>
+                    <div className="mt-3">
+                      <Link
+                        href="/contacto"
+                        className="text-sm font-medium text-black underline underline-offset-2"
+                      >
+                        Ir a contacto
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </form>
