@@ -16,6 +16,7 @@ type ContactRequestRow = {
   source: string | null;
   status: string | null;
   created_at: string;
+  last_contact_at: string | null;
 };
 
 type AdminContactoDetallePageProps = {
@@ -33,7 +34,9 @@ const CONTACT_ADMIN_EMAILS = (
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "Sin registrar";
+
   try {
     return new Intl.DateTimeFormat("es-ES", {
       dateStyle: "medium",
@@ -206,12 +209,49 @@ export default async function AdminContactoDetallePage({
     redirect(`/admin/contactos/${actionId}`);
   }
 
+  async function markLastContactNow(formData: FormData) {
+    "use server";
+
+    const { user: actionUser } = await getServerBusinessContext();
+
+    if (!actionUser) {
+      redirect("/login?redirectTo=/admin/contactos");
+    }
+
+    const actionUserEmail = actionUser.email?.trim().toLowerCase() ?? "";
+
+    if (!CONTACT_ADMIN_EMAILS.includes(actionUserEmail)) {
+      redirect("/dashboard");
+    }
+
+    const rawId = String(formData.get("id") ?? "");
+
+    const actionId = Number(rawId);
+
+    if (!Number.isFinite(actionId) || actionId <= 0) {
+      revalidatePath("/admin/contactos");
+      return;
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    await supabaseAdmin
+      .from("contact_requests")
+      .update({ last_contact_at: new Date().toISOString() })
+      .eq("id", actionId);
+
+    revalidatePath("/admin/contactos");
+    revalidatePath(`/admin/contactos/${actionId}`);
+    revalidatePath("/dashboard");
+    redirect(`/admin/contactos/${actionId}`);
+  }
+
   const supabaseAdmin = getSupabaseAdmin();
 
   const { data, error } = await supabaseAdmin
     .from("contact_requests")
     .select(
-      "id, name, email, business_name, phone, employees_range, message, internal_notes, source, status, created_at"
+      "id, name, email, business_name, phone, employees_range, message, internal_notes, source, status, created_at, last_contact_at"
     )
     .eq("id", id)
     .maybeSingle();
@@ -289,7 +329,7 @@ export default async function AdminContactoDetallePage({
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Email
@@ -323,6 +363,15 @@ export default async function AdminContactoDetallePage({
               </p>
               <p className="mt-2 text-sm text-zinc-900">
                 {item.employees_range || "No indicado"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Último contacto
+              </p>
+              <p className="mt-2 text-sm text-zinc-900">
+                {formatDateTime(item.last_contact_at)}
               </p>
             </div>
           </div>
@@ -387,6 +436,16 @@ export default async function AdminContactoDetallePage({
                   )}`}
                 >
                   Marcar como atendida
+                </button>
+              </form>
+
+              <form action={markLastContactNow}>
+                <input type="hidden" name="id" value={item.id} />
+                <button
+                  type="submit"
+                  className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                >
+                  Marcar contacto ahora
                 </button>
               </form>
             </div>
