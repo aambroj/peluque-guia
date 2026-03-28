@@ -22,6 +22,7 @@ type BusinessSummary = {
 type SubscriptionSummary = {
   plan: string | null;
   status: string | null;
+  employee_limit: number | null;
 };
 
 type ChartItem = {
@@ -208,6 +209,41 @@ function hasAdvancedDashboardAccess(
   );
 }
 
+function getDefaultEmployeeLimit(plan: string | null | undefined) {
+  const normalized = normalizeText(plan ?? "");
+
+  if (normalized === "basic") return 2;
+  if (normalized === "pro") return 5;
+  if (normalized === "premium") return 10;
+
+  return 2;
+}
+
+function isManagedSubscriptionStatus(status: string | null | undefined) {
+  const normalized = normalizeText(status ?? "");
+
+  return ["active", "trialing", "past_due", "paused", "unpaid"].includes(
+    normalized
+  );
+}
+
+function getEffectiveEmployeeLimit(params: {
+  plan: string | null | undefined;
+  status: string | null | undefined;
+  employeeLimit: number | null | undefined;
+}) {
+  if (
+    isManagedSubscriptionStatus(params.status) &&
+    typeof params.employeeLimit === "number" &&
+    Number.isFinite(params.employeeLimit) &&
+    params.employeeLimit > 0
+  ) {
+    return params.employeeLimit;
+  }
+
+  return getDefaultEmployeeLimit(params.plan);
+}
+
 function formatShortDayLabel(date: string) {
   const [year, month, day] = date.split("-").map(Number);
   const value = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
@@ -329,7 +365,7 @@ export default async function DashboardPage() {
 
     supabase
       .from("subscriptions")
-      .select("plan, status")
+      .select("plan, status, employee_limit")
       .eq("business_id", businessId)
       .maybeSingle(),
 
@@ -502,6 +538,26 @@ export default async function DashboardPage() {
         empleado.public_booking_enabled === true
     ).length ?? 0;
 
+  const includedEmployeeLimit = getEffectiveEmployeeLimit({
+    plan: subscriptionInfo?.plan,
+    status: subscriptionInfo?.status,
+    employeeLimit: subscriptionInfo?.employee_limit,
+  });
+
+  const extraBillableEmployees = Math.max(
+    empleadosActivosCount - includedEmployeeLimit,
+    0
+  );
+
+  const remainingEmployeeCapacity = Math.max(
+    includedEmployeeLimit - empleadosActivosCount,
+    0
+  );
+
+  const premiumCanScale =
+    normalizeText(subscriptionInfo?.plan ?? "") === "premium" &&
+    isManagedSubscriptionStatus(subscriptionInfo?.status);
+
   const reservasHoy = reservasHoyDetalle ?? [];
   const reservasMes = reservasMesDetalle ?? [];
   const reservasUltimos7 = reservasUltimos7Detalle ?? [];
@@ -633,6 +689,14 @@ export default async function DashboardPage() {
                 <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
                   {formatSubscriptionStatus(subscriptionInfo?.status)}
                 </span>
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 font-medium text-white/85">
+                  Equipo {empleadosActivosCount}/{includedEmployeeLimit}
+                </span>
+                {extraBillableEmployees > 0 ? (
+                  <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1 font-medium text-amber-100">
+                    {extraBillableEmployees} extra
+                  </span>
+                ) : null}
                 {publicBookingUrl ? (
                   <a
                     href={publicBookingUrl}
@@ -701,67 +765,125 @@ export default async function DashboardPage() {
             </div>
           </div>
         ) : null}
-{publicBookingUrl ? (
-  <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div className="max-w-3xl">
-        <h3 className="text-xl font-semibold text-emerald-900">
-          Comparte tu web de reservas con tus clientes
-        </h3>
-        <p className="mt-2 text-sm text-emerald-800">
-          Este es tu enlace público real para que tus clientes reserven online
-          directamente en tu peluquería.
-        </p>
 
-        <a
-          href={publicBookingUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 block break-all rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-900 underline underline-offset-2 hover:bg-emerald-100"
-        >
-          {publicBookingUrl}
-        </a>
-      </div>
+        {extraBillableEmployees > 0 ? (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-amber-900">
+              Tu equipo supera la capacidad incluida del plan
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-amber-800">
+              Tienes {empleadosActivosCount} empleados activos y tu plan incluye{" "}
+              {includedEmployeeLimit}. Eso deja {extraBillableEmployees} empleado
+              {extraBillableEmployees === 1 ? "" : "s"} extra facturable
+              {extraBillableEmployees === 1 ? "" : "s"}.
+            </p>
+          </div>
+        ) : null}
 
-      <div className="flex flex-wrap gap-3">
-        <CopyBookingUrlButton
-          value={publicBookingUrl}
-          defaultLabel="Copiar enlace de tu web de reservas públicas"
-          copiedLabel="Enlace de reservas copiado"
-          className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-        />
+        {!extraBillableEmployees &&
+        premiumCanScale &&
+        includedEmployeeLimit === 10 ? (
+          <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-violet-900">
+              Premium preparado para crecer
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-violet-800">
+              Tu plan Premium incluye hasta {includedEmployeeLimit} empleados
+              activos. A partir del empleado 11 el sistema queda preparado para
+              aplicar suplemento mensual por empleado activo extra.
+            </p>
+          </div>
+        ) : null}
 
-        <a
-          href={publicBookingUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-medium text-emerald-900 transition hover:bg-emerald-100"
-        >
-          Abrir web pública
-        </a>
-      </div>
-    </div>
-  </div>
-) : (
-  <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-    <h3 className="text-xl font-semibold text-amber-900">
-      Aún no tienes activa tu web de reservas
-    </h3>
-    <p className="mt-2 text-sm text-amber-800">
-      Cuando tu negocio tenga identificador público, aquí podrás copiar y
-      compartir el enlace de reservas online con tus clientes.
-    </p>
-    <div className="mt-4">
-      <Link
-        href="/cuenta"
-        className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
-      >
-        Revisar datos del negocio
-      </Link>
-    </div>
-  </div>
-)}
-        <div className="grid gap-4 xl:grid-cols-3">
+        {!premiumCanScale &&
+        empleadosActivosCount >= includedEmployeeLimit ? (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-amber-900">
+                  Has alcanzado el límite de empleados de tu plan
+                </h3>
+                <p className="mt-2 text-sm leading-7 text-amber-800">
+                  Ahora mismo tienes {empleadosActivosCount} empleados activos y
+                  tu plan incluye hasta {includedEmployeeLimit}. Para añadir más
+                  empleados tendrás que mejorar la suscripción.
+                </p>
+              </div>
+
+              <div>
+                <Link
+                  href="/cuenta/planes"
+                  className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  Ver planes
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {publicBookingUrl ? (
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-3xl">
+                <h3 className="text-xl font-semibold text-emerald-900">
+                  Comparte tu web de reservas con tus clientes
+                </h3>
+                <p className="mt-2 text-sm text-emerald-800">
+                  Este es tu enlace público real para que tus clientes reserven
+                  online directamente en tu peluquería.
+                </p>
+
+                <a
+                  href={publicBookingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 block break-all rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-900 underline underline-offset-2 hover:bg-emerald-100"
+                >
+                  {publicBookingUrl}
+                </a>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <CopyBookingUrlButton
+                  value={publicBookingUrl}
+                  defaultLabel="Copiar enlace de tu web de reservas públicas"
+                  copiedLabel="Enlace de reservas copiado"
+                  className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                />
+
+                <a
+                  href={publicBookingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-medium text-emerald-900 transition hover:bg-emerald-100"
+                >
+                  Abrir web pública
+                </a>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-amber-900">
+              Aún no tienes activa tu web de reservas
+            </h3>
+            <p className="mt-2 text-sm text-amber-800">
+              Cuando tu negocio tenga identificador público, aquí podrás copiar
+              y compartir el enlace de reservas online con tus clientes.
+            </p>
+            <div className="mt-4">
+              <Link
+                href="/cuenta"
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Revisar datos del negocio
+              </Link>
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-4 xl:grid-cols-4">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-zinc-500">Tu negocio</p>
             <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
@@ -824,6 +946,20 @@ export default async function DashboardPage() {
 
             <p className="mt-3 text-sm text-zinc-500">
               Estado actual del negocio dentro del sistema SaaS.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm font-medium text-zinc-500">
+              Capacidad del plan
+            </p>
+            <p className="mt-3 text-2xl font-bold tracking-tight text-zinc-900">
+              {empleadosActivosCount} / {includedEmployeeLimit}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              {extraBillableEmployees > 0
+                ? `${extraBillableEmployees} empleado(s) extra por encima de la capacidad incluida.`
+                : `${remainingEmployeeCapacity} plaza(s) libres dentro del plan.`}
             </p>
           </div>
         </div>
