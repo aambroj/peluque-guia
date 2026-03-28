@@ -386,6 +386,7 @@ export default async function CuentaPage() {
     { data: business, error: businessError },
     { data: subscription, error: subscriptionError },
     { data: profile, error: profileError },
+    { count: activeEmployeesCount, error: activeEmployeesCountError },
   ] = await Promise.all([
     supabase
       .from("businesses")
@@ -406,11 +407,20 @@ export default async function CuentaPage() {
       .select("full_name, role")
       .eq("id", user.id)
       .maybeSingle(),
+
+    supabase
+      .from("empleados")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .neq("status", "Inactivo"),
   ]);
 
-  const errores = [businessError, subscriptionError, profileError].filter(
-    Boolean
-  );
+  const errores = [
+    businessError,
+    subscriptionError,
+    profileError,
+    activeEmployeesCountError,
+  ].filter(Boolean);
 
   const planLabel = formatPlanLabel(subscription?.plan);
   const statusLabel = getEffectiveStatusLabel({
@@ -424,6 +434,9 @@ export default async function CuentaPage() {
     subscription.employee_limit > 0
       ? subscription.employee_limit
       : getDefaultEmployeeLimit(subscription?.plan);
+
+  const activeEmployees = activeEmployeesCount ?? 0;
+  const extraBillableEmployees = Math.max(activeEmployees - employeeLimit, 0);
 
   const notice = getSubscriptionNotice({
     plan: subscription?.plan,
@@ -472,8 +485,8 @@ export default async function CuentaPage() {
 
                 <p className="mt-3 text-zinc-600">
                   Desde aquí puedes consultar el estado real de tu suscripción,
-                  compartir tu enlace de reservas online y mantener la imagen de
-                  tu negocio más cuidada.
+                  compartir tu enlace de reservas online y entender mejor cómo
+                  impacta el equipo activo en tu cuenta.
                 </p>
               </div>
 
@@ -535,7 +548,7 @@ export default async function CuentaPage() {
                 {employeeLimit} empleados
               </p>
               <p className="mt-1 text-sm text-zinc-500">
-                Límite para crear o reactivar equipo.
+                Incluidos en tu plan base actual.
               </p>
             </div>
 
@@ -607,6 +620,80 @@ export default async function CuentaPage() {
             </div>
           </div>
         </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-500">Empleados activos</p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
+              {activeEmployees}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Equipo actualmente activo en el negocio.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-500">Incluidos en tu plan</p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
+              {employeeLimit}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Capacidad base incluida según tu suscripción.
+            </p>
+          </div>
+
+          <div
+            className={`rounded-3xl border p-6 shadow-sm ${
+              extraBillableEmployees > 0
+                ? "border-amber-200 bg-amber-50"
+                : "border-zinc-200 bg-white"
+            }`}
+          >
+            <p
+              className={`text-sm ${
+                extraBillableEmployees > 0
+                  ? "text-amber-700"
+                  : "text-zinc-500"
+              }`}
+            >
+              Empleados extra facturables
+            </p>
+            <p
+              className={`mt-2 text-3xl font-bold tracking-tight ${
+                extraBillableEmployees > 0
+                  ? "text-amber-950"
+                  : "text-zinc-900"
+              }`}
+            >
+              {extraBillableEmployees}
+            </p>
+            <p
+              className={`mt-2 text-sm ${
+                extraBillableEmployees > 0
+                  ? "text-amber-800"
+                  : "text-zinc-500"
+              }`}
+            >
+              {extraBillableEmployees > 0
+                ? "Actualmente este exceso de capacidad debería reflejarse como suplemento mensual."
+                : "Ahora mismo no hay empleados extra por encima de la capacidad incluida."}
+            </p>
+          </div>
+        </div>
+
+        {extraBillableEmployees > 0 ? (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-amber-900">
+              Tu negocio supera la capacidad incluida del plan
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-amber-800">
+              Tienes {activeEmployees} empleados activos y tu plan incluye{" "}
+              {employeeLimit}. Eso deja {extraBillableEmployees} empleado
+              {extraBillableEmployees === 1 ? "" : "s"} extra facturable
+              {extraBillableEmployees === 1 ? "" : "s"}.
+            </p>
+          </div>
+        ) : null}
 
         {publicBookingUrl ? (
           <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
@@ -781,10 +868,31 @@ export default async function CuentaPage() {
                 </div>
               </div>
 
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                  <p className="text-sm text-zinc-500">Incluidos en el plan</p>
+                  <p className="mt-1 text-lg font-semibold text-zinc-900">
+                    {employeeLimit} activos
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                  <p className="text-sm text-zinc-500">Activos actuales</p>
+                  <p className="mt-1 text-lg font-semibold text-zinc-900">
+                    {activeEmployees}
+                  </p>
+                </div>
+              </div>
+
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-                <p className="text-sm text-zinc-500">Límite de empleados</p>
+                <p className="text-sm text-zinc-500">Empleados extra</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  {employeeLimit} activos
+                  {extraBillableEmployees}
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  {extraBillableEmployees > 0
+                    ? "Actualmente hay equipo activo por encima de la capacidad incluida."
+                    : "No hay exceso de empleados respecto al plan."}
                 </p>
               </div>
 
@@ -887,13 +995,15 @@ export default async function CuentaPage() {
 
             <div className="rounded-2xl border border-zinc-200 p-4">
               <p className="text-sm font-medium text-zinc-500">
-                Capacidad incluida
+                Equipo y capacidad
               </p>
               <p className="mt-2 text-lg font-semibold text-zinc-900">
-                {employeeLimit} empleados activos
+                {activeEmployees} / {employeeLimit}
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                El límite se aplica al crear o reactivar miembros del equipo.
+                {extraBillableEmployees > 0
+                  ? `${extraBillableEmployees} empleado(s) extra por encima de la capacidad incluida.`
+                  : "Tu equipo está dentro de la capacidad incluida del plan."}
               </p>
             </div>
           </div>

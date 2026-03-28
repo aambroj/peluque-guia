@@ -16,7 +16,9 @@ export default function StripeCheckoutButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleClick = async () => {
+  async function handleClick() {
+    if (loading) return;
+
     setLoading(true);
     setError("");
 
@@ -29,23 +31,29 @@ export default function StripeCheckoutButton({
         body: JSON.stringify({ plan }),
       });
 
-      const data = await response.json();
+      let data: any = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
         throw new Error(data?.error || "No se pudo abrir Checkout.");
       }
 
-      if (!data?.url) {
-        throw new Error("Stripe no devolvió la URL de Checkout.");
+      if (!data?.url || typeof data.url !== "string") {
+        throw new Error("Stripe no devolvió una URL válida de Checkout.");
       }
 
       window.location.href = data.url;
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado.");
       setLoading(false);
-      return;
     }
-  };
+  }
 
   return (
     <div className="space-y-2">
@@ -53,13 +61,16 @@ export default function StripeCheckoutButton({
         type="button"
         onClick={handleClick}
         disabled={loading}
+        aria-disabled={loading}
         className={className}
       >
         {loading ? "Redirigiendo..." : children}
       </button>
 
       {error ? (
-        <p className="text-sm text-red-600">{error}</p>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
       ) : null}
     </div>
   );
