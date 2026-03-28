@@ -235,12 +235,12 @@ export default function HomePage() {
             >
               FAQ
             </a>
-            <a
-              href="#contacto"
+            <Link
+              href="/contacto"
               className="text-sm font-medium text-zinc-600 transition hover:text-black"
             >
               Contacto
-            </a>
+            </Link>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -295,12 +295,12 @@ export default function HomePage() {
                 Ver planes
               </a>
 
-              <a
-                href="mailto:alber.ambroj@gmail.com?subject=Solicitud%20de%20demo%20-%20Peluque-Gu%C3%ADa"
+              <Link
+                href="/contacto"
                 className="rounded-2xl border border-zinc-300 bg-white px-6 py-3.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
               >
                 Solicitar demo
-              </a>
+              </Link>
             </div>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -757,12 +757,12 @@ export default function HomePage() {
                 >
                   Crear negocio
                 </Link>
-                <a
-                  href="mailto:alber.ambroj@gmail.com?subject=Solicitud%20de%20demo%20-%20Peluque-Gu%C3%ADa"
+                <Link
+                  href="/contacto"
                   className="rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/15"
                 >
                   Solicitar demo
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -777,12 +777,12 @@ export default function HomePage() {
                 directamente y ver el producto con más detalle.
               </p>
               <div className="mt-4">
-                <a
-                  href="mailto:alber.ambroj@gmail.com?subject=Quiero%20una%20demo%20de%20Peluque-Gu%C3%ADa"
+                <Link
+                  href="/contacto"
                   className="inline-flex rounded-2xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
                 >
                   Pedir demo
-                </a>
+                </Link>
               </div>
             </div>
 
