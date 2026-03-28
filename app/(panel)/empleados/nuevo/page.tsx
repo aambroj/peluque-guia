@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -20,6 +21,20 @@ function normalizeText(value: string) {
     .toLocaleLowerCase("es")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getRequiredEnv(name: string) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Falta la variable de entorno ${name}.`);
+  }
+
+  return value;
+}
+
+function getStripeClient() {
+  return new Stripe(getRequiredEnv("STRIPE_SECRET_KEY"));
 }
 
 function getPlanKey(plan: string | null | undefined): PlanKey | null {
@@ -77,6 +92,47 @@ function getEffectiveEmployeeLimit(params: {
   return getDefaultEmployeeLimit(params.plan);
 }
 
+async function syncPremiumExtraEmployees(params: {
+  stripeSubscriptionId: string;
+  extraEmployees: number;
+}) {
+  const stripe = getStripeClient();
+  const extraEmployeePriceId = getRequiredEnv(
+    "STRIPE_PRICE_EXTRA_EMPLOYEE_MONTHLY"
+  );
+
+  const stripeSubscription = await stripe.subscriptions.retrieve(
+    params.stripeSubscriptionId
+  );
+
+  const extraItem =
+    stripeSubscription.items.data.find(
+      (item) => item.price?.id === extraEmployeePriceId
+    ) ?? null;
+
+  if (params.extraEmployees <= 0) {
+    if (extraItem) {
+      await stripe.subscriptionItems.del(extraItem.id);
+    }
+    return;
+  }
+
+  if (extraItem) {
+    await stripe.subscriptionItems.update(extraItem.id, {
+      quantity: params.extraEmployees,
+      proration_behavior: "create_prorations",
+    });
+    return;
+  }
+
+  await stripe.subscriptionItems.create({
+    subscription: params.stripeSubscriptionId,
+    price: extraEmployeePriceId,
+    quantity: params.extraEmployees,
+    proration_behavior: "create_prorations",
+  });
+}
+
 export default async function NuevoEmpleadoPage({
   searchParams,
 }: NuevoEmpleadoPageProps) {
@@ -97,7 +153,7 @@ export default async function NuevoEmpleadoPage({
     await Promise.all([
       supabase
         .from("subscriptions")
-        .select("plan, status, employee_limit")
+        .select("plan, status, employee_limit, stripe_subscription_id")
         .eq("business_id", businessId)
         .maybeSingle(),
 
@@ -109,6 +165,10 @@ export default async function NuevoEmpleadoPage({
     ]);
 
   const currentPlanLabel = formatPlanLabel(subscription?.plan);
+  const planKey = getPlanKey(subscription?.plan);
+  const hasManagedSubscription = isManagedSubscriptionStatus(
+    subscription?.status
+  );
   const employeeLimit = getEffectiveEmployeeLimit({
     plan: subscription?.plan,
     status: subscription?.status,
@@ -116,7 +176,22 @@ export default async function NuevoEmpleadoPage({
   });
   const currentActiveEmployees = activeEmployeesCount ?? 0;
   const remainingSlots = Math.max(employeeLimit - currentActiveEmployees, 0);
-  const isAtLimit = currentActiveEmployees >= employeeLimit;
+  const currentExtraEmployees = Math.max(
+    currentActiveEmployees - employeeLimit,
+    0
+  );
+  const nextExtraEmployees = Math.max(
+    currentActiveEmployees + 1 - employeeLimit,
+    0
+  );
+
+  const canScaleWithExtraEmployees =
+    planKey === "premium" &&
+    hasManagedSubscription &&
+    !!subscription?.stripe_subscription_id;
+
+  const isBlockedByPlan =
+    currentActiveEmployees >= employeeLimit && !canScaleWithExtraEmployees;
 
   async function createEmpleado(formData: FormData) {
     "use server";
@@ -151,7 +226,7 @@ export default async function NuevoEmpleadoPage({
     ] = await Promise.all([
       supabaseAdmin
         .from("subscriptions")
-        .select("plan, status, employee_limit")
+        .select("plan, status, employee_limit, stripe_subscription_id")
         .eq("business_id", businessId)
         .maybeSingle(),
 
@@ -170,6 +245,11 @@ export default async function NuevoEmpleadoPage({
       );
     }
 
+    const planKey = getPlanKey(subscription?.plan);
+    const hasManagedSubscription = isManagedSubscriptionStatus(
+      subscription?.status
+    );
+
     const employeeLimit = getEffectiveEmployeeLimit({
       plan: subscription?.plan,
       status: subscription?.status,
@@ -177,8 +257,14 @@ export default async function NuevoEmpleadoPage({
     });
 
     const currentActiveEmployees = activeEmployeesCount ?? 0;
+    const nextActiveEmployees = currentActiveEmployees + 1;
 
-    if (currentActiveEmployees >= employeeLimit) {
+    const canScaleWithExtraEmployees =
+      planKey === "premium" &&
+      hasManagedSubscription &&
+      !!subscription?.stripe_subscription_id;
+
+    if (nextActiveEmployees > employeeLimit && !canScaleWithExtraEmployees) {
       redirect(
         `/empleados/nuevo?error=${encodeURIComponent(
           `Has alcanzado el límite de ${employeeLimit} empleados activos de tu plan. Mejora tu suscripción en Cuenta > Planes para añadir más empleados.`
@@ -205,12 +291,38 @@ export default async function NuevoEmpleadoPage({
       redirect(`/empleados/nuevo?error=${encodeURIComponent(error.message)}`);
     }
 
+    if (canScaleWithExtraEmployees) {
+      const extraEmployees = Math.max(nextActiveEmployees - employeeLimit, 0);
+
+      try {
+        await syncPremiumExtraEmployees({
+          stripeSubscriptionId: subscription!.stripe_subscription_id!,
+          extraEmployees,
+        });
+      } catch (stripeError) {
+        await supabaseAdmin
+          .from("empleados")
+          .delete()
+          .eq("id", nuevoEmpleado.id)
+          .eq("business_id", businessId);
+
+        redirect(
+          `/empleados/nuevo?error=${encodeURIComponent(
+            stripeError instanceof Error
+              ? stripeError.message
+              : "No se pudo sincronizar el suplemento de empleados extra en Stripe."
+          )}`
+        );
+      }
+    }
+
     revalidatePath("/empleados");
     revalidatePath("/dashboard");
     revalidatePath("/reservas");
     revalidatePath("/reservar");
     revalidatePath("/cuenta");
     revalidatePath("/cuenta/planes");
+    revalidatePath("/cuenta/facturacion");
 
     redirect(`/empleados/editar/${nuevoEmpleado.id}/horario`);
   }
@@ -244,14 +356,38 @@ export default async function NuevoEmpleadoPage({
           </div>
         ) : null}
 
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-zinc-500">Plan actual</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {currentPlanLabel}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-zinc-500">Empleados activos</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {currentActiveEmployees}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-zinc-500">Incluidos en el plan</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {employeeLimit}
+            </p>
+          </div>
+        </div>
+
         <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
           <p className="font-medium">
             Plan actual: {currentPlanLabel} · Máximo {employeeLimit} empleados
-            activos
+            incluidos
           </p>
           <p className="mt-1">
             Ahora mismo tienes {currentActiveEmployees} activos y te quedan{" "}
-            {remainingSlots} plazas disponibles.
+            {remainingSlots} plaza{remainingSlots === 1 ? "" : "s"} dentro de la
+            capacidad incluida.
           </p>
         </div>
 
@@ -261,7 +397,24 @@ export default async function NuevoEmpleadoPage({
           llevaremos directamente a su pantalla de horario.
         </div>
 
-        {isAtLimit ? (
+        {canScaleWithExtraEmployees ? (
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-800">
+            <p className="font-medium">
+              Premium permite crecer por encima de la capacidad incluida
+            </p>
+            <p className="mt-1">
+              Tu plan incluye {employeeLimit} empleados activos. A partir del
+              empleado 11 se aplicará un suplemento mensual por empleado extra.
+            </p>
+            <p className="mt-1">
+              Ahora mismo tienes {currentExtraEmployees} empleado
+              {currentExtraEmployees === 1 ? "" : "s"} extra y, si guardas este
+              nuevo empleado, pasarías a {nextExtraEmployees}.
+            </p>
+          </div>
+        ) : null}
+
+        {isBlockedByPlan ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             Has alcanzado el límite de empleados de tu plan. Para añadir más,
             mejora tu suscripción en{" "}
@@ -359,7 +512,7 @@ export default async function NuevoEmpleadoPage({
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={isAtLimit}
+                disabled={isBlockedByPlan}
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Guardar y configurar horario
@@ -372,7 +525,7 @@ export default async function NuevoEmpleadoPage({
                 Cancelar
               </Link>
 
-              {isAtLimit ? (
+              {isBlockedByPlan ? (
                 <Link
                   href="/cuenta/planes"
                   className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
