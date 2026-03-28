@@ -63,6 +63,8 @@ const ONBOARDING_NAV_ITEMS: NavItem[] = [
   },
 ];
 
+const CONTACT_ADMIN_EMAILS = ["alber.ambroj@gmail.com", "aambroj@yahoo.es"];
+
 function normalizeText(value: string) {
   return value
     .trim()
@@ -94,6 +96,7 @@ export default function Sidebar() {
 
   const [isLoadingAccessState, setIsLoadingAccessState] = useState(true);
   const [isPendingActivation, setIsPendingActivation] = useState(false);
+  const [isContactAdmin, setIsContactAdmin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,9 +110,16 @@ export default function Sidebar() {
         if (!user) {
           if (!cancelled) {
             setIsPendingActivation(false);
+            setIsContactAdmin(false);
             setIsLoadingAccessState(false);
           }
           return;
+        }
+
+        const userEmail = user.email?.trim().toLowerCase() ?? "";
+
+        if (!cancelled) {
+          setIsContactAdmin(CONTACT_ADMIN_EMAILS.includes(userEmail));
         }
 
         const { data: profile } = await supabase
@@ -144,6 +154,7 @@ export default function Sidebar() {
       } catch {
         if (!cancelled) {
           setIsPendingActivation(false);
+          setIsContactAdmin(false);
           setIsLoadingAccessState(false);
         }
       }
@@ -164,6 +175,7 @@ export default function Sidebar() {
   );
 
   const homeHref = restrictedMode ? "/cuenta" : "/dashboard";
+  const adminContactosActive = isActive(pathname, "/admin/contactos");
 
   return (
     <aside className="border-r border-zinc-200 bg-white">
@@ -263,6 +275,32 @@ export default function Sidebar() {
               </div>
             </div>
           )}
+
+          {isContactAdmin ? (
+            <Link
+              href="/admin/contactos"
+              className={`block rounded-2xl border px-4 py-4 transition ${
+                adminContactosActive
+                  ? "border-sky-900 bg-sky-900 text-white shadow-sm"
+                  : "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100"
+              }`}
+            >
+              <p
+                className={`text-sm font-semibold ${
+                  adminContactosActive ? "text-white" : "text-sky-950"
+                }`}
+              >
+                Solicitudes de contacto
+              </p>
+              <p
+                className={`mt-1 text-xs ${
+                  adminContactosActive ? "text-sky-100" : "text-sky-800"
+                }`}
+              >
+                Demos y formularios de la web pública
+              </p>
+            </Link>
+          ) : null}
 
           <LogoutButton />
         </div>

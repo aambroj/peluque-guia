@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerBusinessContext } from "@/lib/supabase-server";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import LogoutButton from "@/components/LogoutButton";
 import AdvancedDashboardCharts from "@/components/AdvancedDashboardCharts";
 import CopyBookingUrlButton from "@/components/CopyBookingUrlButton";
@@ -12,6 +13,15 @@ const APP_URL =
 
 const REVENUE_STATUSES = new Set(["Confirmada", "Completada"]);
 const MADRID_TIME_ZONE = "Europe/Madrid";
+
+const CONTACT_ADMIN_EMAILS = (
+  process.env.CONTACT_ADMIN_EMAILS?.split(",") ?? [
+    "alber.ambroj@gmail.com",
+    "aambroj@yahoo.es",
+  ]
+)
+  .map((value) => value.trim().toLowerCase())
+  .filter(Boolean);
 
 type BusinessSummary = {
   id: number;
@@ -311,6 +321,10 @@ export default async function DashboardPage() {
     redirect("/registro");
   }
 
+  const userEmail = user.email?.trim().toLowerCase() ?? "";
+  const isContactAdmin = CONTACT_ADMIN_EMAILS.includes(userEmail);
+  const supabaseAdmin = isContactAdmin ? getSupabaseAdmin() : null;
+
   const madridToday = getMadridDateAtNoonUTC();
   const today = toDateValue(madridToday);
   const next7End = toDateValue(addDays(madridToday, 6));
@@ -339,6 +353,16 @@ export default async function DashboardPage() {
     year: "numeric",
   }).format(new Date());
 
+  const contactRequestsPromise = isContactAdmin && supabaseAdmin
+    ? supabaseAdmin
+        .from("contact_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "new")
+    : Promise.resolve({
+        count: 0,
+        error: null as { message?: string } | null,
+      });
+
   const [
     { data: businessDetalle, error: businessDetalleError },
     { data: subscriptionDetalle, error: subscriptionDetalleError },
@@ -356,6 +380,7 @@ export default async function DashboardPage() {
     { data: reservasMesDetalle, error: reservasMesDetalleError },
     { data: reservasUltimos7Detalle, error: reservasUltimos7DetalleError },
     { data: reservasProximos7Detalle, error: reservasProximos7DetalleError },
+    { count: contactRequestsNewCount, error: contactRequestsNewError },
   ] = await Promise.all([
     supabase
       .from("businesses")
@@ -491,6 +516,8 @@ export default async function DashboardPage() {
       .eq("business_id", businessId)
       .gte("date", today)
       .lte("date", next7End),
+
+    contactRequestsPromise,
   ]);
 
   const errores = [
@@ -510,6 +537,7 @@ export default async function DashboardPage() {
     reservasMesDetalleError,
     reservasUltimos7DetalleError,
     reservasProximos7DetalleError,
+    isContactAdmin ? contactRequestsNewError : null,
   ].filter(Boolean);
 
   const businessInfo = (businessDetalle ?? null) as BusinessSummary | null;
@@ -964,6 +992,35 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        {isContactAdmin ? (
+          <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-medium text-sky-700">
+                  Captación SaaS
+                </p>
+                <h3 className="mt-2 text-xl font-semibold text-sky-950">
+                  Solicitudes de contacto
+                </h3>
+                <p className="mt-2 text-sm leading-7 text-sky-900">
+                  {contactRequestsNewError
+                    ? "No se pudieron cargar ahora mismo las solicitudes nuevas."
+                    : `Tienes ${contactRequestsNewCount ?? 0} solicitud(es) nueva(s) pendiente(s) de revisar desde la web pública.`}
+                </p>
+              </div>
+
+              <div>
+                <Link
+                  href="/admin/contactos"
+                  className="rounded-xl bg-sky-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-sky-950"
+                >
+                  Ver solicitudes
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-zinc-500">Clientes</p>
@@ -1248,7 +1305,11 @@ export default async function DashboardPage() {
             ) : null}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div
+            className={`grid gap-4 md:grid-cols-2 ${
+              isContactAdmin ? "xl:grid-cols-6" : "xl:grid-cols-5"
+            }`}
+          >
             <Link
               href="/reservas/nuevo"
               className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
@@ -1322,6 +1383,22 @@ export default async function DashboardPage() {
                 </p>
               </Link>
             )}
+
+            {isContactAdmin ? (
+              <Link
+                href="/admin/contactos"
+                className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <p className="text-lg font-semibold text-sky-950">
+                  Solicitudes de contacto
+                </p>
+                <p className="mt-2 text-sm text-sky-800">
+                  {contactRequestsNewError
+                    ? "Revisar demos y formularios recibidos"
+                    : `${contactRequestsNewCount ?? 0} nuevas por revisar`}
+                </p>
+              </Link>
+            ) : null}
           </div>
         </div>
 
