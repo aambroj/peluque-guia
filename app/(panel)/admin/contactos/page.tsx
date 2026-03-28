@@ -12,6 +12,7 @@ type ContactRequestRow = {
   phone: string | null;
   employees_range: string | null;
   message: string;
+  internal_notes: string | null;
   source: string | null;
   status: string | null;
   created_at: string;
@@ -118,6 +119,16 @@ function getFilterLinkClasses(active: boolean) {
     : "border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50";
 }
 
+function getRedirectUrlForFilter(filter: string) {
+  const normalized = normalizeFilterStatus(filter);
+
+  if (normalized === "all") {
+    return "/admin/contactos";
+  }
+
+  return `/admin/contactos?status=${normalized}`;
+}
+
 export default async function AdminContactosPage({
   searchParams,
 }: AdminContactosPageProps) {
@@ -157,7 +168,6 @@ export default async function AdminContactosPage({
 
     const id = Number(rawId);
     const allowedStatuses = new Set(["new", "pending", "done"]);
-    const filter = normalizeFilterStatus(rawFilter);
 
     if (!Number.isFinite(id) || id <= 0 || !allowedStatuses.has(rawStatus)) {
       revalidatePath("/admin/contactos");
@@ -173,12 +183,45 @@ export default async function AdminContactosPage({
 
     revalidatePath("/admin/contactos");
     revalidatePath("/dashboard");
+    redirect(getRedirectUrlForFilter(rawFilter));
+  }
 
-    if (filter === "all") {
-      redirect("/admin/contactos");
+  async function saveInternalNotes(formData: FormData) {
+    "use server";
+
+    const { user: actionUser } = await getServerBusinessContext();
+
+    if (!actionUser) {
+      redirect("/login?redirectTo=/admin/contactos");
     }
 
-    redirect(`/admin/contactos?status=${filter}`);
+    const actionUserEmail = actionUser.email?.trim().toLowerCase() ?? "";
+
+    if (!CONTACT_ADMIN_EMAILS.includes(actionUserEmail)) {
+      redirect("/dashboard");
+    }
+
+    const rawId = String(formData.get("id") ?? "");
+    const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
+    const rawNotes = String(formData.get("internal_notes") ?? "");
+
+    const id = Number(rawId);
+    const internalNotes = rawNotes.trim();
+
+    if (!Number.isFinite(id) || id <= 0) {
+      revalidatePath("/admin/contactos");
+      return;
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    await supabaseAdmin
+      .from("contact_requests")
+      .update({ internal_notes: internalNotes || null })
+      .eq("id", id);
+
+    revalidatePath("/admin/contactos");
+    redirect(getRedirectUrlForFilter(rawFilter));
   }
 
   const supabaseAdmin = getSupabaseAdmin();
@@ -186,7 +229,7 @@ export default async function AdminContactosPage({
   const { data, error } = await supabaseAdmin
     .from("contact_requests")
     .select(
-      "id, name, email, business_name, phone, employees_range, message, source, status, created_at"
+      "id, name, email, business_name, phone, employees_range, message, internal_notes, source, status, created_at"
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -463,6 +506,39 @@ export default async function AdminContactosPage({
                       </button>
                     </form>
                   </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                      Notas internas
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      Solo visibles para administración
+                    </p>
+                  </div>
+
+                  <form action={saveInternalNotes} className="mt-3">
+                    <input type="hidden" name="id" value={item.id} />
+                    <input type="hidden" name="filter" value={activeFilter} />
+
+                    <textarea
+                      name="internal_notes"
+                      defaultValue={item.internal_notes ?? ""}
+                      rows={4}
+                      className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                      placeholder="Ejemplo: quiere demo, le interesa reserva online, volver a contactar el viernes..."
+                    />
+
+                    <div className="mt-3">
+                      <button
+                        type="submit"
+                        className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                      >
+                        Guardar notas
+                      </button>
+                    </div>
+                  </form>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
