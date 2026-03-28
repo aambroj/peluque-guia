@@ -21,6 +21,7 @@ type ContactRequestRow = {
 type AdminContactosPageProps = {
   searchParams?: Promise<{
     status?: string;
+    q?: string;
   }>;
 };
 
@@ -43,6 +44,14 @@ function formatDateTime(value: string) {
   } catch {
     return value;
   }
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function normalizeStatusValue(value: string | null | undefined) {
@@ -119,14 +128,44 @@ function getFilterLinkClasses(active: boolean) {
     : "border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50";
 }
 
-function getRedirectUrlForFilter(filter: string) {
-  const normalized = normalizeFilterStatus(filter);
+function buildContactosUrl(params: { filter?: string; q?: string }) {
+  const filter = normalizeFilterStatus(params.filter);
+  const q = (params.q ?? "").trim();
 
-  if (normalized === "all") {
-    return "/admin/contactos";
+  const search = new URLSearchParams();
+
+  if (filter !== "all") {
+    search.set("status", filter);
   }
 
-  return `/admin/contactos?status=${normalized}`;
+  if (q) {
+    search.set("q", q);
+  }
+
+  const queryString = search.toString();
+
+  return queryString ? `/admin/contactos?${queryString}` : "/admin/contactos";
+}
+
+function matchesSearch(item: ContactRequestRow, rawQuery: string) {
+  const query = normalizeText(rawQuery);
+
+  if (!query) return true;
+
+  const haystack = [
+    item.name,
+    item.email,
+    item.business_name,
+    item.phone,
+    item.employees_range,
+    item.message,
+    item.internal_notes,
+    item.source,
+  ]
+    .map((value) => normalizeText(value))
+    .join(" ");
+
+  return haystack.includes(query);
 }
 
 export default async function AdminContactosPage({
@@ -146,6 +185,7 @@ export default async function AdminContactosPage({
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const activeFilter = normalizeFilterStatus(resolvedSearchParams?.status);
+  const searchQuery = (resolvedSearchParams?.q ?? "").trim();
 
   async function updateContactRequestStatus(formData: FormData) {
     "use server";
@@ -165,6 +205,7 @@ export default async function AdminContactosPage({
     const rawId = String(formData.get("id") ?? "");
     const rawStatus = String(formData.get("status") ?? "").trim().toLowerCase();
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
+    const rawQuery = String(formData.get("q") ?? "");
 
     const id = Number(rawId);
     const allowedStatuses = new Set(["new", "pending", "done"]);
@@ -183,7 +224,7 @@ export default async function AdminContactosPage({
 
     revalidatePath("/admin/contactos");
     revalidatePath("/dashboard");
-    redirect(getRedirectUrlForFilter(rawFilter));
+    redirect(buildContactosUrl({ filter: rawFilter, q: rawQuery }));
   }
 
   async function saveInternalNotes(formData: FormData) {
@@ -203,6 +244,7 @@ export default async function AdminContactosPage({
 
     const rawId = String(formData.get("id") ?? "");
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
+    const rawQuery = String(formData.get("q") ?? "");
     const rawNotes = String(formData.get("internal_notes") ?? "");
 
     const id = Number(rawId);
@@ -221,7 +263,7 @@ export default async function AdminContactosPage({
       .eq("id", id);
 
     revalidatePath("/admin/contactos");
-    redirect(getRedirectUrlForFilter(rawFilter));
+    redirect(buildContactosUrl({ filter: rawFilter, q: rawQuery }));
   }
 
   const supabaseAdmin = getSupabaseAdmin();
@@ -249,8 +291,12 @@ export default async function AdminContactosPage({
   ).length;
 
   const filteredRequests = requests.filter((item) => {
-    if (activeFilter === "all") return true;
-    return normalizeStatusValue(item.status) === activeFilter;
+    const statusMatches =
+      activeFilter === "all" || normalizeStatusValue(item.status) === activeFilter;
+
+    const queryMatches = matchesSearch(item, searchQuery);
+
+    return statusMatches && queryMatches;
   });
 
   return (
@@ -310,9 +356,46 @@ export default async function AdminContactosPage({
           </div>
         </div>
 
+        <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <form className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-zinc-700">
+                Buscar solicitud
+              </label>
+              <input
+                type="text"
+                name="q"
+                defaultValue={searchQuery}
+                placeholder="Buscar por nombre, email, salón, teléfono, mensaje o notas..."
+                className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {activeFilter !== "all" ? (
+                <input type="hidden" name="status" value={activeFilter} />
+              ) : null}
+
+              <button
+                type="submit"
+                className="rounded-2xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Buscar
+              </button>
+
+              <Link
+                href={buildContactosUrl({ filter: activeFilter })}
+                className="rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+              >
+                Limpiar búsqueda
+              </Link>
+            </div>
+          </form>
+        </div>
+
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href="/admin/contactos"
+            href={buildContactosUrl({ filter: "all", q: searchQuery })}
             className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
               activeFilter === "all"
             )}`}
@@ -321,7 +404,7 @@ export default async function AdminContactosPage({
           </Link>
 
           <Link
-            href="/admin/contactos?status=new"
+            href={buildContactosUrl({ filter: "new", q: searchQuery })}
             className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
               activeFilter === "new"
             )}`}
@@ -330,7 +413,7 @@ export default async function AdminContactosPage({
           </Link>
 
           <Link
-            href="/admin/contactos?status=pending"
+            href={buildContactosUrl({ filter: "pending", q: searchQuery })}
             className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
               activeFilter === "pending"
             )}`}
@@ -339,7 +422,7 @@ export default async function AdminContactosPage({
           </Link>
 
           <Link
-            href="/admin/contactos?status=done"
+            href={buildContactosUrl({ filter: "done", q: searchQuery })}
             className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
               activeFilter === "done"
             )}`}
@@ -357,10 +440,10 @@ export default async function AdminContactosPage({
         {!error && filteredRequests.length === 0 ? (
           <div className="mt-8 rounded-[2rem] border border-zinc-200 bg-white p-8 text-center shadow-sm">
             <p className="text-lg font-semibold text-zinc-900">
-              No hay solicitudes para este filtro
+              No hay solicitudes para este filtro o búsqueda
             </p>
             <p className="mt-3 text-sm leading-6 text-zinc-600">
-              Cambia el filtro o espera a que lleguen nuevas solicitudes.
+              Cambia el filtro, limpia la búsqueda o espera a que lleguen nuevas solicitudes.
             </p>
           </div>
         ) : null}
@@ -459,6 +542,7 @@ export default async function AdminContactosPage({
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="status" value="new" />
                       <input type="hidden" name="filter" value={activeFilter} />
+                      <input type="hidden" name="q" value={searchQuery} />
                       <button
                         type="submit"
                         className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
@@ -476,6 +560,7 @@ export default async function AdminContactosPage({
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="status" value="pending" />
                       <input type="hidden" name="filter" value={activeFilter} />
+                      <input type="hidden" name="q" value={searchQuery} />
                       <button
                         type="submit"
                         className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
@@ -493,6 +578,7 @@ export default async function AdminContactosPage({
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="status" value="done" />
                       <input type="hidden" name="filter" value={activeFilter} />
+                      <input type="hidden" name="q" value={searchQuery} />
                       <button
                         type="submit"
                         className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
@@ -521,6 +607,7 @@ export default async function AdminContactosPage({
                   <form action={saveInternalNotes} className="mt-3">
                     <input type="hidden" name="id" value={item.id} />
                     <input type="hidden" name="filter" value={activeFilter} />
+                    <input type="hidden" name="q" value={searchQuery} />
 
                     <textarea
                       name="internal_notes"
