@@ -517,7 +517,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-8 grid gap-5 md:grid-cols-2">
+          <div className="mt-8 grid gap-5 md:grid-cols-3">
             <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
               <p className="text-sm font-semibold text-zinc-900">
                 Soporte y contacto
@@ -550,6 +550,63 @@ export default function HomePage() {
                 con más orden, dar mejor imagen y facilitar la reserva online a
                 sus clientes.
               </p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
+              <p className="text-sm font-semibold text-zinc-900">
+                Información legal
+              </p>
+              <p className="mt-3 text-sm leading-7 text-zinc-600">
+                Consulta las políticas y condiciones visibles del servicio.
+              </p>
+
+              <div className="mt-4 flex flex-col gap-2 text-sm">
+                <Link
+                  href="/privacidad"
+                  className="text-zinc-700 underline underline-offset-2 hover:text-black"
+                >
+                  Política de privacidad
+                </Link>
+                <Link
+                  href="/terminos"
+                  className="text-zinc-700 underline underline-offset-2 hover:text-black"
+                >
+                  Términos y condiciones
+                </Link>
+                <Link
+                  href="/cookies"
+                  className="text-zinc-700 underline underline-offset-2 hover:text-black"
+                >
+                  Política de cookies
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm">
+            <div className="flex flex-col gap-4 text-sm text-zinc-500 md:flex-row md:items-center md:justify-between">
+              <p>© Peluque-Guía. Gestión profesional para peluquerías.</p>
+
+              <div className="flex flex-wrap gap-4">
+                <Link
+                  href="/privacidad"
+                  className="underline underline-offset-2 hover:text-black"
+                >
+                  Privacidad
+                </Link>
+                <Link
+                  href="/terminos"
+                  className="underline underline-offset-2 hover:text-black"
+                >
+                  Términos
+                </Link>
+                <Link
+                  href="/cookies"
+                  className="underline underline-offset-2 hover:text-black"
+                >
+                  Cookies
+                </Link>
+              </div>
             </div>
           </div>
         </div>
