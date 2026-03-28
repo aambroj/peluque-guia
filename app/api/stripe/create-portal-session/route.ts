@@ -23,6 +23,22 @@ function getAppUrl() {
   return getRequiredEnv("NEXT_PUBLIC_APP_URL").replace(/\/+$/, "");
 }
 
+function normalizeText(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isManagedSubscriptionStatus(status: string | null | undefined) {
+  const normalized = normalizeText(status ?? "");
+
+  return ["active", "trialing", "past_due", "paused", "unpaid"].includes(
+    normalized
+  );
+}
+
 export async function POST() {
   try {
     const { user, businessId } = await getServerBusinessContext();
@@ -46,7 +62,7 @@ export async function POST() {
 
     const { data: subscription, error: subscriptionError } = await supabaseAdmin
       .from("subscriptions")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id, stripe_subscription_id, status")
       .eq("business_id", businessId)
       .maybeSingle();
 
@@ -67,10 +83,30 @@ export async function POST() {
       );
     }
 
+    if (
+      !subscription?.stripe_subscription_id ||
+      !isManagedSubscriptionStatus(subscription.status)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Todavía no hay una suscripción gestionable desde Stripe para este negocio.",
+        },
+        { status: 400 }
+      );
+    }
+
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
-      return_url: `${getAppUrl()}/cuenta`,
+      return_url: `${getAppUrl()}/cuenta/facturacion`,
     });
+
+    if (!portalSession.url) {
+      return NextResponse.json(
+        { error: "Stripe no devolvió la URL del portal de facturación." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ url: portalSession.url });
   } catch (error) {

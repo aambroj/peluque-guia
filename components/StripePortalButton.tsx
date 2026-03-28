@@ -14,7 +14,9 @@ export default function StripePortalButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleClick = async () => {
+  async function handleClick() {
+    if (loading) return;
+
     setLoading(true);
     setError("");
 
@@ -23,23 +25,29 @@ export default function StripePortalButton({
         method: "POST",
       });
 
-      const data = await response.json();
+      let data: any = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
 
       if (!response.ok) {
         throw new Error(data?.error || "No se pudo abrir facturación.");
       }
 
-      if (!data?.url) {
-        throw new Error("Stripe no devolvió la URL del portal.");
+      if (!data?.url || typeof data.url !== "string") {
+        throw new Error("Stripe no devolvió una URL válida del portal.");
       }
 
       window.location.href = data.url;
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado.");
       setLoading(false);
-      return;
     }
-  };
+  }
 
   return (
     <div className="space-y-2">
@@ -47,13 +55,16 @@ export default function StripePortalButton({
         type="button"
         onClick={handleClick}
         disabled={loading}
+        aria-disabled={loading}
         className={className}
       >
         {loading ? "Redirigiendo..." : children}
       </button>
 
       {error ? (
-        <p className="text-sm text-red-600">{error}</p>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
       ) : null}
     </div>
   );
