@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getServerBusinessContext } from "@/lib/supabase-server";
@@ -10,6 +11,20 @@ function normalizeText(value: string) {
     .toLocaleLowerCase("es")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getRequiredEnv(name: string) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Falta la variable de entorno ${name}.`);
+  }
+
+  return value;
+}
+
+function getStripeClient() {
+  return new Stripe(getRequiredEnv("STRIPE_SECRET_KEY"));
 }
 
 function getPlanKey(plan: string | null | undefined): PlanKey | null {
@@ -57,6 +72,47 @@ function getEffectiveEmployeeLimit(params: {
   return getDefaultEmployeeLimit(params.plan);
 }
 
+async function syncPremiumExtraEmployees(params: {
+  stripeSubscriptionId: string;
+  extraEmployees: number;
+}) {
+  const stripe = getStripeClient();
+  const extraEmployeePriceId = getRequiredEnv(
+    "STRIPE_PRICE_EXTRA_EMPLOYEE_MONTHLY"
+  );
+
+  const stripeSubscription = await stripe.subscriptions.retrieve(
+    params.stripeSubscriptionId
+  );
+
+  const extraItem =
+    stripeSubscription.items.data.find(
+      (item) => item.price?.id === extraEmployeePriceId
+    ) ?? null;
+
+  if (params.extraEmployees <= 0) {
+    if (extraItem) {
+      await stripe.subscriptionItems.del(extraItem.id);
+    }
+    return;
+  }
+
+  if (extraItem) {
+    await stripe.subscriptionItems.update(extraItem.id, {
+      quantity: params.extraEmployees,
+      proration_behavior: "create_prorations",
+    });
+    return;
+  }
+
+  await stripe.subscriptionItems.create({
+    subscription: params.stripeSubscriptionId,
+    price: extraEmployeePriceId,
+    quantity: params.extraEmployees,
+    proration_behavior: "create_prorations",
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { user, businessId } = await getServerBusinessContext();
@@ -98,7 +154,7 @@ export async function POST(request: NextRequest) {
 
       supabaseAdmin
         .from("subscriptions")
-        .select("plan, status, employee_limit")
+        .select("plan, status, employee_limit, stripe_subscription_id")
         .eq("business_id", businessId)
         .maybeSingle(),
 
@@ -144,24 +200,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const employeeLimit = getEffectiveEmployeeLimit({
+    const planKey = getPlanKey(subscription?.plan);
+    const hasManagedSubscription = isManagedSubscriptionStatus(
+      subscription?.status
+    );
+
+    const includedEmployeeLimit = getEffectiveEmployeeLimit({
       plan: subscription?.plan,
       status: subscription?.status,
       employeeLimit: subscription?.employee_limit,
     });
 
     const currentActiveEmployees = activeEmployeesCount ?? 0;
+    const nextActiveEmployees = currentActiveEmployees + 1;
 
-    if (currentActiveEmployees >= employeeLimit) {
+    const isPremiumManagedPlan =
+      planKey === "premium" && hasManagedSubscription;
+
+    const canScaleWithExtraEmployees =
+      isPremiumManagedPlan && !!subscription?.stripe_subscription_id;
+
+    if (
+      nextActiveEmployees > includedEmployeeLimit &&
+      !canScaleWithExtraEmployees
+    ) {
+      if (planKey === "premium" && hasManagedSubscription) {
+        return NextResponse.json(
+          {
+            error:
+              "Has superado los empleados incluidos en Premium, pero no se ha podido sincronizar el suplemento mensual por empleado extra. Revisa Stripe y vuelve a intentarlo.",
+          },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
         {
-          error: `Has alcanzado el límite de ${employeeLimit} empleados activos de tu plan. Mejora tu suscripción para reactivar más empleados.`,
+          error: `Has alcanzado el límite de ${includedEmployeeLimit} empleados activos de tu plan. Mejora tu suscripción para reactivar más empleados.`,
         },
         { status: 409 }
       );
     }
 
-    const { error } = await supabaseAdmin
+    const { error: reactivateError } = await supabaseAdmin
       .from("empleados")
       .update({
         status: "Disponible",
@@ -169,8 +250,43 @@ export async function POST(request: NextRequest) {
       .eq("id", id)
       .eq("business_id", businessId);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (reactivateError) {
+      return NextResponse.json(
+        { error: reactivateError.message },
+        { status: 500 }
+      );
+    }
+
+    if (canScaleWithExtraEmployees) {
+      const extraEmployees = Math.max(
+        nextActiveEmployees - includedEmployeeLimit,
+        0
+      );
+
+      try {
+        await syncPremiumExtraEmployees({
+          stripeSubscriptionId: subscription!.stripe_subscription_id!,
+          extraEmployees,
+        });
+      } catch (stripeError) {
+        await supabaseAdmin
+          .from("empleados")
+          .update({
+            status: "Inactivo",
+          })
+          .eq("id", id)
+          .eq("business_id", businessId);
+
+        return NextResponse.json(
+          {
+            error:
+              stripeError instanceof Error
+                ? stripeError.message
+                : "No se pudo sincronizar el suplemento de empleados extra en Stripe.",
+          },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ ok: true });
