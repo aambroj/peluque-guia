@@ -76,6 +76,16 @@ function getTargetPlan(plan: string | null | undefined): PlanKey | null {
   return null;
 }
 
+function formatPlanLabel(plan: string | null | undefined) {
+  const targetPlan = getTargetPlan(plan);
+
+  if (targetPlan === "basic") return "Basic";
+  if (targetPlan === "pro") return "Pro";
+  if (targetPlan === "premium") return "Premium";
+
+  return "Sin plan";
+}
+
 function getPlanDetails(plan: PlanKey) {
   const config = PLAN_CONFIG[plan];
 
@@ -118,6 +128,25 @@ function buildPlanCapacityError(params: {
   }
 
   return `No se puede contratar este plan con ${activeEmployees} empleados activos.`;
+}
+
+function buildManagedSubscriptionError(params: {
+  currentPlan: string | null | undefined;
+  targetPlan: PlanKey;
+}) {
+  const currentPlanKey = getTargetPlan(params.currentPlan);
+  const currentPlanLabel = formatPlanLabel(params.currentPlan);
+  const targetPlanLabel = formatPlanLabel(params.targetPlan);
+
+  if (currentPlanKey && currentPlanKey === params.targetPlan) {
+    return `Tu negocio ya tiene el plan ${targetPlanLabel} activo o gestionable. Usa Facturación para administrarlo.`;
+  }
+
+  if (currentPlanKey) {
+    return `Tu negocio ya tiene una suscripción gestionable (${currentPlanLabel}). Para cambiar a ${targetPlanLabel}, usa Facturación.`;
+  }
+
+  return "Este negocio ya tiene una suscripción activa o gestionable. Usa Facturación para administrarla.";
 }
 
 export async function POST(request: Request) {
@@ -217,8 +246,10 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         {
-          error:
-            "Este negocio ya tiene una suscripción activa o gestionable. Usa Facturación para administrarla.",
+          error: buildManagedSubscriptionError({
+            currentPlan: subscription.plan,
+            targetPlan,
+          }),
         },
         { status: 409 }
       );
@@ -318,6 +349,8 @@ export async function POST(request: Request) {
         extra_employees: String(extraEmployees),
         extra_employee_price_id: extraEmployeePriceId ?? "",
         trial_days: String(trialDays ?? 0),
+        current_plan: subscription.plan ?? "",
+        current_status: subscription.status ?? "",
       },
       subscription_data: {
         metadata: {
@@ -330,6 +363,8 @@ export async function POST(request: Request) {
           extra_employees: String(extraEmployees),
           extra_employee_price_id: extraEmployeePriceId ?? "",
           trial_days: String(trialDays ?? 0),
+          current_plan: subscription.plan ?? "",
+          current_status: subscription.status ?? "",
         },
         ...(trialDays ? { trial_period_days: trialDays } : {}),
       },

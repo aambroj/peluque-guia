@@ -19,8 +19,12 @@ type PlanDefinition = {
   badgeClassName: string;
   titleClassName: string;
   textClassName: string;
-  buttonClassName?: string;
 };
+
+type ActionState =
+  | { kind: "current"; label: string }
+  | { kind: "portal"; label: string; href: string }
+  | { kind: "checkout"; label: string };
 
 const PLAN_ORDER: Record<PlanKey, number> = {
   basic: 0,
@@ -82,7 +86,8 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
       "Mayor capacidad operativa",
       "Preparado para integraciones y crecimiento",
     ],
-    highlight: "Desde el empleado 11 se añade un suplemento mensual por empleado activo extra.",
+    highlight:
+      "Desde el empleado 11 se añade un suplemento mensual por empleado activo extra.",
     cardClassName: "border-violet-200 bg-violet-50",
     badgeClassName: "border-violet-200 bg-white text-violet-700",
     titleClassName: "text-violet-950",
@@ -183,6 +188,50 @@ function getActionLabel(planKey: PlanKey) {
   return "Pasar a Premium";
 }
 
+function buildPlanActionState(params: {
+  plan: PlanKey;
+  currentPlanKey: PlanKey | null;
+  hasManagedSubscription: boolean;
+}): ActionState {
+  const { plan, currentPlanKey, hasManagedSubscription } = params;
+
+  if (hasManagedSubscription && currentPlanKey === plan) {
+    return {
+      kind: "current",
+      label: "Plan actual",
+    };
+  }
+
+  if (hasManagedSubscription) {
+    if (currentPlanKey === null) {
+      return {
+        kind: "portal",
+        label: "Gestionar en facturación",
+        href: "/cuenta/facturacion",
+      };
+    }
+
+    if (PLAN_ORDER[plan] > PLAN_ORDER[currentPlanKey]) {
+      return {
+        kind: "portal",
+        label: `Cambiar a ${formatPlanLabel(plan)}`,
+        href: "/cuenta/facturacion",
+      };
+    }
+
+    return {
+      kind: "portal",
+      label: "Gestionar en facturación",
+      href: "/cuenta/facturacion",
+    };
+  }
+
+  return {
+    kind: "checkout",
+    label: getActionLabel(plan),
+  };
+}
+
 export default async function PlanesPage() {
   const { supabase, user, businessId } = await getServerBusinessContext();
 
@@ -257,16 +306,35 @@ export default async function PlanesPage() {
             </div>
 
             <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <p className="text-sm text-zinc-500">Capacidad actual</p>
+              <p className="text-sm text-zinc-500">Gestión del plan</p>
               <p className="mt-2 text-lg font-semibold text-zinc-900">
-                {typeof subscription?.employee_limit === "number" &&
-                subscription.employee_limit > 0
-                  ? `${subscription.employee_limit} empleados`
-                  : "Según tu plan"}
+                {hasManagedSubscription ? "Desde facturación" : "Desde checkout"}
               </p>
             </div>
           </div>
         </div>
+
+        {hasManagedSubscription ? (
+          <div className="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-sky-900">
+              Tu suscripción ya se gestiona desde facturación
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-sky-800">
+              Como tu negocio ya tiene una suscripción gestionable, los cambios
+              de plan, facturas, método de pago y cancelación deben hacerse
+              desde la pantalla de facturación.
+            </p>
+
+            <div className="mt-4">
+              <Link
+                href="/cuenta/facturacion"
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Ir a facturación
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h3 className="text-xl font-semibold text-zinc-900">
@@ -310,18 +378,11 @@ export default async function PlanesPage() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           {PLAN_DEFINITIONS.map((plan) => {
-            const isCurrentPlan =
-              hasManagedSubscription && currentPlanKey === plan.key;
-
-            const isDowngrade =
-              hasManagedSubscription &&
-              currentPlanKey !== null &&
-              PLAN_ORDER[plan.key] < PLAN_ORDER[currentPlanKey];
-
-            const canStartOrUpgrade =
-              !hasManagedSubscription ||
-              currentPlanKey === null ||
-              PLAN_ORDER[plan.key] > PLAN_ORDER[currentPlanKey];
+            const actionState = buildPlanActionState({
+              plan: plan.key,
+              currentPlanKey,
+              hasManagedSubscription,
+            });
 
             return (
               <div
@@ -379,25 +440,24 @@ export default async function PlanesPage() {
                 ) : null}
 
                 <div className="mt-6">
-                  {isCurrentPlan ? (
+                  {actionState.kind === "current" ? (
                     <div className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-5 py-3 text-center text-sm font-medium text-zinc-600">
-                      Plan actual
+                      {actionState.label}
                     </div>
-                  ) : isDowngrade ? (
-                    <div className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-5 py-3 text-center text-sm font-medium text-zinc-600">
-                      Downgrade próximamente
-                    </div>
-                  ) : canStartOrUpgrade ? (
+                  ) : actionState.kind === "portal" ? (
+                    <Link
+                      href={actionState.href}
+                      className="block w-full rounded-xl border border-zinc-300 bg-white px-5 py-3 text-center text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                    >
+                      {actionState.label}
+                    </Link>
+                  ) : (
                     <StripeCheckoutButton
                       plan={plan.key}
                       className="w-full rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                     >
-                      {getActionLabel(plan.key)}
+                      {actionState.label}
                     </StripeCheckoutButton>
-                  ) : (
-                    <div className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-5 py-3 text-center text-sm font-medium text-zinc-600">
-                      No disponible
-                    </div>
                   )}
                 </div>
               </div>
@@ -444,9 +504,9 @@ export default async function PlanesPage() {
             Siguiente fase
           </h3>
           <p className="mt-2 text-sm leading-7 text-amber-800">
-            Lo siguiente será conectar esta pantalla con Stripe para que Premium
-            pueda añadir automáticamente el suplemento mensual por empleado
-            activo extra a partir del 11.
+            Lo siguiente será terminar de validar en real el flujo de cobro y,
+            después, habilitar más métodos de pago y ajustes finos del portal de
+            facturación.
           </p>
         </div>
       </div>
