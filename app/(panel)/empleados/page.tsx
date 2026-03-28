@@ -19,6 +19,20 @@ type ScheduleRow = {
   is_working: boolean;
 };
 
+type SubscriptionSummary = {
+  plan: string | null;
+  status: string | null;
+  employee_limit: number | null;
+};
+
+type EmpleadoRow = {
+  id: number;
+  name: string | null;
+  role: string | null;
+  phone: string | null;
+  status: string | null;
+};
+
 function normalizeText(value: string) {
   return value
     .trim()
@@ -61,6 +75,60 @@ function hasValidWorkingSchedule(rows: ScheduleRow[] | null | undefined) {
   });
 }
 
+function getPlanKey(plan: string | null | undefined) {
+  const normalized = normalizeText(plan ?? "");
+
+  if (normalized === "basic") return "basic";
+  if (normalized === "pro") return "pro";
+  if (normalized === "premium") return "premium";
+
+  return null;
+}
+
+function formatPlanLabel(plan: string | null | undefined) {
+  const planKey = getPlanKey(plan);
+
+  if (!planKey) return "Sin plan";
+  if (planKey === "basic") return "Basic";
+  if (planKey === "pro") return "Pro";
+  return "Premium";
+}
+
+function isManagedSubscriptionStatus(status: string | null | undefined) {
+  const normalized = normalizeText(status ?? "");
+
+  return ["active", "trialing", "past_due", "paused", "unpaid"].includes(
+    normalized
+  );
+}
+
+function getDefaultEmployeeLimit(plan: string | null | undefined) {
+  const planKey = getPlanKey(plan);
+
+  if (planKey === "basic") return 2;
+  if (planKey === "pro") return 5;
+  if (planKey === "premium") return 10;
+
+  return 2;
+}
+
+function getEffectiveEmployeeLimit(params: {
+  plan: string | null | undefined;
+  status: string | null | undefined;
+  employeeLimit: number | null | undefined;
+}) {
+  if (
+    isManagedSubscriptionStatus(params.status) &&
+    typeof params.employeeLimit === "number" &&
+    Number.isFinite(params.employeeLimit) &&
+    params.employeeLimit > 0
+  ) {
+    return params.employeeLimit;
+  }
+
+  return getDefaultEmployeeLimit(params.plan);
+}
+
 export default async function EmpleadosPage({
   searchParams,
 }: EmpleadosPageProps) {
@@ -80,6 +148,7 @@ export default async function EmpleadosPage({
   const [
     { data: empleados, error: empleadosError },
     { data: schedules, error: schedulesError },
+    { data: subscription, error: subscriptionError },
   ] = await Promise.all([
     supabase
       .from("empleados")
@@ -93,20 +162,26 @@ export default async function EmpleadosPage({
         "id, business_id, employee_id, weekday, start_time, end_time, is_working"
       )
       .eq("business_id", businessId),
+
+    supabase
+      .from("subscriptions")
+      .select("plan, status, employee_limit")
+      .eq("business_id", businessId)
+      .maybeSingle(),
   ]);
 
-  const error = empleadosError || schedulesError;
+  const error = empleadosError || schedulesError || subscriptionError;
 
   const schedulesByEmployee = new Map<number, ScheduleRow[]>();
 
-  for (const row of ((schedules ?? []) as ScheduleRow[])) {
+  for (const row of (schedules ?? []) as ScheduleRow[]) {
     const list = schedulesByEmployee.get(row.employee_id) ?? [];
     list.push(row);
     schedulesByEmployee.set(row.employee_id, list);
   }
 
   const empleadosActivos =
-    empleados?.filter(
+    ((empleados ?? []) as EmpleadoRow[]).filter(
       (empleado) => normalizeText(empleado.status ?? "Activo") !== "inactivo"
     ) ?? [];
 
@@ -137,6 +212,31 @@ export default async function EmpleadosPage({
     return texto.includes(q);
   });
 
+  const activeEmployeesCount = empleadosActivos.length;
+  const planLabel = formatPlanLabel(subscription?.plan);
+  const includedEmployeeLimit = getEffectiveEmployeeLimit({
+    plan: subscription?.plan,
+    status: subscription?.status,
+    employeeLimit: subscription?.employee_limit,
+  });
+
+  const extraBillableEmployees = Math.max(
+    activeEmployeesCount - includedEmployeeLimit,
+    0
+  );
+
+  const remainingCapacity = Math.max(
+    includedEmployeeLimit - activeEmployeesCount,
+    0
+  );
+
+  const planKey = getPlanKey(subscription?.plan);
+  const managedSubscription = isManagedSubscriptionStatus(subscription?.status);
+  const canScaleWithExtraEmployees =
+    planKey === "premium" && managedSubscription;
+
+  const isAtLimitOrAbove = activeEmployeesCount >= includedEmployeeLimit;
+
   return (
     <section className="px-6 py-8">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -159,6 +259,145 @@ export default async function EmpleadosPage({
             </Link>
           </div>
         </div>
+
+        <div className="grid gap-6 lg:grid-cols-4">
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-500">Plan actual</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {planLabel}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Capacidad aplicada al equipo activo.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-500">Empleados activos</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {activeEmployeesCount}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Miembros del equipo actualmente activos.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-500">Incluidos en el plan</p>
+            <p className="mt-2 text-2xl font-bold tracking-tight text-zinc-900">
+              {includedEmployeeLimit}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Capacidad base incluida en tu suscripción.
+            </p>
+          </div>
+
+          <div
+            className={`rounded-3xl border p-6 shadow-sm ${
+              extraBillableEmployees > 0
+                ? "border-amber-200 bg-amber-50"
+                : "border-zinc-200 bg-white"
+            }`}
+          >
+            <p
+              className={`text-sm ${
+                extraBillableEmployees > 0
+                  ? "text-amber-700"
+                  : "text-zinc-500"
+              }`}
+            >
+              Empleados extra
+            </p>
+            <p
+              className={`mt-2 text-2xl font-bold tracking-tight ${
+                extraBillableEmployees > 0
+                  ? "text-amber-950"
+                  : "text-zinc-900"
+              }`}
+            >
+              {extraBillableEmployees}
+            </p>
+            <p
+              className={`mt-2 text-sm ${
+                extraBillableEmployees > 0
+                  ? "text-amber-800"
+                  : "text-zinc-500"
+              }`}
+            >
+              {extraBillableEmployees > 0
+                ? "Equipo por encima de la capacidad incluida."
+                : "Sin exceso respecto al plan actual."}
+            </p>
+          </div>
+        </div>
+
+        {!error && canScaleWithExtraEmployees && extraBillableEmployees > 0 ? (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-amber-900">
+              Premium con empleados extra
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-amber-800">
+              Tu negocio tiene {activeEmployeesCount} empleados activos y tu
+              plan incluye {includedEmployeeLimit}. Eso deja{" "}
+              {extraBillableEmployees} empleado
+              {extraBillableEmployees === 1 ? "" : "s"} extra facturable
+              {extraBillableEmployees === 1 ? "" : "s"}.
+            </p>
+          </div>
+        ) : null}
+
+        {!error &&
+        !canScaleWithExtraEmployees &&
+        planKey !== "premium" &&
+        isAtLimitOrAbove ? (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-amber-900">
+              Has alcanzado el límite de empleados de tu plan
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-amber-800">
+              Ahora mismo tienes {activeEmployeesCount} empleados activos y tu
+              plan {planLabel} incluye hasta {includedEmployeeLimit}. Para crear
+              o reactivar más empleados tendrás que mejorar la suscripción.
+            </p>
+            <div className="mt-4">
+              <Link
+                href="/cuenta/planes"
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Ver planes
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {!error &&
+        !canScaleWithExtraEmployees &&
+        planKey !== "premium" &&
+        !isAtLimitOrAbove ? (
+          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-zinc-900">
+              Capacidad disponible
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-zinc-600">
+              Aún te quedan {remainingCapacity} plaza
+              {remainingCapacity === 1 ? "" : "s"} disponible
+              {remainingCapacity === 1 ? "" : "s"} dentro de la capacidad
+              incluida de tu plan {planLabel}.
+            </p>
+          </div>
+        ) : null}
+
+        {!error && canScaleWithExtraEmployees && extraBillableEmployees === 0 ? (
+          <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
+            <h3 className="text-xl font-semibold text-violet-900">
+              Premium preparado para crecer
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-violet-800">
+              Tu plan Premium incluye hasta {includedEmployeeLimit} empleados
+              activos. A partir del empleado 11 el sistema queda preparado para
+              aplicar suplemento mensual por cada empleado activo extra.
+            </p>
+          </div>
+        ) : null}
 
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
