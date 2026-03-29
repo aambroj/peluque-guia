@@ -64,6 +64,14 @@ function formatDateValue(value: string | null | undefined) {
   }
 }
 
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLocaleLowerCase("es")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function normalizeStatusValue(value: string | null | undefined) {
   const normalized = (value ?? "").trim().toLowerCase();
 
@@ -82,6 +90,39 @@ function normalizeStatusLabel(value: string | null | undefined) {
   if (normalized === "done") return "Atendida";
 
   return "Nueva";
+}
+
+function normalizeSourceValue(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+
+  if (!normalized) return "web";
+  return normalized;
+}
+
+function normalizeSourceLabel(value: string | null | undefined) {
+  const normalized = normalizeSourceValue(value);
+
+  if (normalized === "web") return "Web";
+  if (normalized === "demo") return "Demo";
+  if (normalized === "formulario") return "Formulario";
+  if (normalized === "landing") return "Landing";
+  if (normalized === "contacto") return "Contacto";
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function getSourceClasses(value: string | null | undefined) {
+  const normalized = normalizeSourceValue(value);
+
+  if (normalized === "demo") {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  }
+
+  if (normalized === "web") {
+    return "border-zinc-200 bg-zinc-50 text-zinc-700";
+  }
+
+  return "border-cyan-200 bg-cyan-50 text-cyan-700";
 }
 
 function getStatusClasses(value: string | null | undefined) {
@@ -141,6 +182,10 @@ function hasFollowUpDate(value: string | null | undefined) {
   return /^\d{4}-\d{2}-\d{2}$/.test((value ?? "").trim());
 }
 
+function hasLastContact(value: string | null | undefined) {
+  return Boolean((value ?? "").trim());
+}
+
 function getFollowUpPriority(
   value: string | null | undefined,
   status: string | null | undefined
@@ -186,13 +231,24 @@ function getFollowUpPriorityClasses(priority: FollowUpPriority) {
   return "border-zinc-200 bg-zinc-50 text-zinc-500";
 }
 
-function getContactCardClasses(priority: FollowUpPriority) {
+function getNoContactBadgeClasses() {
+  return "border-violet-200 bg-violet-50 text-violet-700";
+}
+
+function getContactCardClasses(
+  priority: FollowUpPriority,
+  withoutContact: boolean
+) {
   if (priority === "overdue") {
     return "rounded-[2rem] border border-red-300 bg-white p-6 shadow-sm ring-1 ring-red-100";
   }
 
   if (priority === "today") {
     return "rounded-[2rem] border border-amber-300 bg-white p-6 shadow-sm ring-1 ring-amber-100";
+  }
+
+  if (withoutContact) {
+    return "rounded-[2rem] border border-violet-300 bg-white p-6 shadow-sm ring-1 ring-violet-100";
   }
 
   return "rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-sm";
@@ -222,7 +278,18 @@ function getFollowUpBoxClasses(priority: FollowUpPriority) {
   return "rounded-2xl border border-zinc-200 bg-zinc-50 p-4";
 }
 
-function getFollowUpBannerClasses(priority: FollowUpPriority) {
+function getLastContactBoxClasses(withoutContact: boolean) {
+  if (withoutContact) {
+    return "rounded-2xl border border-violet-200 bg-violet-50 p-4";
+  }
+
+  return "rounded-2xl border border-zinc-200 bg-zinc-50 p-4";
+}
+
+function getLeadBannerClasses(
+  priority: FollowUpPriority,
+  withoutContact: boolean
+) {
   if (priority === "overdue") {
     return "border-red-200 bg-red-50";
   }
@@ -231,8 +298,8 @@ function getFollowUpBannerClasses(priority: FollowUpPriority) {
     return "border-amber-200 bg-amber-50";
   }
 
-  if (priority === "future") {
-    return "border-zinc-200 bg-zinc-50";
+  if (withoutContact) {
+    return "border-violet-200 bg-violet-50";
   }
 
   return "border-zinc-200 bg-zinc-50";
@@ -446,6 +513,7 @@ export default async function AdminContactoDetallePage({
     item.next_follow_up_on,
     item.status
   );
+  const withoutContact = !hasLastContact(item.last_contact_at);
 
   return (
     <main className="min-h-screen bg-zinc-50">
@@ -480,52 +548,70 @@ export default async function AdminContactoDetallePage({
           </div>
         </div>
 
-        {hasFollowUpDate(item.next_follow_up_on) ? (
+        {(followUpPriority === "overdue" ||
+          followUpPriority === "today" ||
+          withoutContact) && (
           <div
-            className={`mt-8 rounded-3xl border p-5 shadow-sm ${getFollowUpBannerClasses(
-              followUpPriority
+            className={`mt-8 rounded-3xl border p-5 shadow-sm ${getLeadBannerClasses(
+              followUpPriority,
+              withoutContact
             )}`}
           >
             <div className="flex flex-wrap items-center gap-3">
+              {followUpPriority === "overdue" || followUpPriority === "today" ? (
+                <span
+                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getFollowUpPriorityClasses(
+                    followUpPriority
+                  )}`}
+                >
+                  {getFollowUpPriorityLabel(followUpPriority)}
+                </span>
+              ) : null}
+
+              {withoutContact ? (
+                <span
+                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getNoContactBadgeClasses()}`}
+                >
+                  Sin contactar
+                </span>
+              ) : null}
+
               <span
-                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getFollowUpPriorityClasses(
-                  followUpPriority
+                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getSourceClasses(
+                  item.source
                 )}`}
               >
-                {getFollowUpPriorityLabel(followUpPriority)}
+                Fuente: {normalizeSourceLabel(item.source)}
               </span>
-
-              <p
-                className={`text-sm font-medium ${
-                  followUpPriority === "overdue"
-                    ? "text-red-800"
-                    : followUpPriority === "today"
-                    ? "text-amber-800"
-                    : "text-zinc-700"
-                }`}
-              >
-                Próximo seguimiento: {formatDateValue(item.next_follow_up_on)}
-              </p>
             </div>
 
             {followUpPriority === "overdue" ? (
-              <p className="mt-2 text-sm text-red-700">
+              <p className="mt-3 text-sm text-red-700">
                 Este lead necesita atención prioritaria porque el seguimiento ya
                 ha vencido.
               </p>
-            ) : followUpPriority === "today" ? (
-              <p className="mt-2 text-sm text-amber-700">
+            ) : null}
+
+            {followUpPriority === "today" ? (
+              <p className="mt-3 text-sm text-amber-700">
                 Este lead debería revisarse hoy.
               </p>
-            ) : (
-              <p className="mt-2 text-sm text-zinc-600">
-                Ya tiene una fecha de seguimiento programada.
-              </p>
-            )}
-          </div>
-        ) : null}
+            ) : null}
 
-        <div className={`mt-8 ${getContactCardClasses(followUpPriority)}`}>
+            {withoutContact ? (
+              <p className="mt-3 text-sm text-violet-700">
+                Todavía no se ha registrado ningún contacto para esta solicitud.
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        <div
+          className={`mt-8 ${getContactCardClasses(
+            followUpPriority,
+            withoutContact
+          )}`}
+        >
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-3">
@@ -550,6 +636,22 @@ export default async function AdminContactoDetallePage({
                     {getFollowUpPriorityLabel(followUpPriority)}
                   </span>
                 ) : null}
+
+                {withoutContact ? (
+                  <span
+                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getNoContactBadgeClasses()}`}
+                  >
+                    Sin contactar
+                  </span>
+                ) : null}
+
+                <span
+                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getSourceClasses(
+                    item.source
+                  )}`}
+                >
+                  {normalizeSourceLabel(item.source)}
+                </span>
               </div>
 
               <p className="mt-2 text-sm text-zinc-500">
@@ -576,13 +678,24 @@ export default async function AdminContactoDetallePage({
                 Seguimiento para hoy
               </p>
               <p className="mt-1 text-sm text-amber-700">
-                Conviene revisar esta solicitud hoy para no perder el
-                seguimiento.
+                Conviene revisar esta solicitud hoy para no perder el seguimiento.
               </p>
             </div>
           ) : null}
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          {withoutContact ? (
+            <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+              <p className="text-sm font-semibold text-violet-800">
+                Sin contacto registrado
+              </p>
+              <p className="mt-1 text-sm text-violet-700">
+                Todavía no se ha marcado ninguna llamada, email o primer contacto
+                para este lead.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Email
@@ -621,10 +734,31 @@ export default async function AdminContactoDetallePage({
 
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                Último contacto
+                Fuente
               </p>
               <p className="mt-2 text-sm text-zinc-900">
-                {formatDateTime(item.last_contact_at)}
+                {normalizeSourceLabel(item.source)}
+              </p>
+            </div>
+
+            <div className={getLastContactBoxClasses(withoutContact)}>
+              <p
+                className={`text-xs font-medium uppercase tracking-wide ${
+                  withoutContact ? "text-violet-700" : "text-zinc-500"
+                }`}
+              >
+                Último contacto
+              </p>
+              <p
+                className={`mt-2 text-sm ${
+                  withoutContact
+                    ? "font-semibold text-violet-900"
+                    : "text-zinc-900"
+                }`}
+              >
+                {withoutContact
+                  ? "Sin contacto todavía"
+                  : formatDateTime(item.last_contact_at)}
               </p>
             </div>
 
@@ -802,7 +936,7 @@ export default async function AdminContactoDetallePage({
 
           <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
             <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
-              Fuente: {item.source || "web"}
+              Fuente: {normalizeSourceLabel(item.source)}
             </span>
             <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
               ID: {item.id}

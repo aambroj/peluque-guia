@@ -25,11 +25,17 @@ type AdminContactosPageProps = {
     status?: string;
     q?: string;
     priority?: string;
+    source?: string;
   }>;
 };
 
 type FollowUpPriority = "none" | "future" | "today" | "overdue";
-type FollowUpFilter = "all" | "overdue" | "today" | "with_follow_up";
+type FollowUpFilter =
+  | "all"
+  | "overdue"
+  | "today"
+  | "with_follow_up"
+  | "without_contact";
 
 const CONTACT_ADMIN_EMAILS = (
   process.env.CONTACT_ADMIN_EMAILS?.split(",") ?? [
@@ -95,6 +101,39 @@ function normalizeStatusLabel(value: string | null | undefined) {
   return "Nueva";
 }
 
+function normalizeSourceValue(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+
+  if (!normalized) return "web";
+  return normalized;
+}
+
+function normalizeSourceLabel(value: string | null | undefined) {
+  const normalized = normalizeSourceValue(value);
+
+  if (normalized === "web") return "Web";
+  if (normalized === "demo") return "Demo";
+  if (normalized === "formulario") return "Formulario";
+  if (normalized === "landing") return "Landing";
+  if (normalized === "contacto") return "Contacto";
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function getSourceClasses(value: string | null | undefined) {
+  const normalized = normalizeSourceValue(value);
+
+  if (normalized === "demo") {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  }
+
+  if (normalized === "web") {
+    return "border-zinc-200 bg-zinc-50 text-zinc-700";
+  }
+
+  return "border-cyan-200 bg-cyan-50 text-cyan-700";
+}
+
 function getStatusClasses(value: string | null | undefined) {
   const normalized = normalizeStatusValue(value);
 
@@ -151,8 +190,16 @@ function normalizeFilterPriority(
   if (normalized === "overdue") return "overdue";
   if (normalized === "today") return "today";
   if (normalized === "with_follow_up") return "with_follow_up";
+  if (normalized === "without_contact") return "without_contact";
 
   return "all";
+}
+
+function normalizeFilterSource(value: string | null | undefined) {
+  const normalized = normalizeText(value);
+
+  if (!normalized || normalized === "all") return "all";
+  return normalized;
 }
 
 function getFilterLinkClasses(active: boolean) {
@@ -165,9 +212,11 @@ function buildContactosUrl(params: {
   filter?: string;
   q?: string;
   priority?: string;
+  source?: string;
 }) {
   const filter = normalizeFilterStatus(params.filter);
   const priority = normalizeFilterPriority(params.priority);
+  const source = normalizeFilterSource(params.source);
   const q = (params.q ?? "").trim();
 
   const search = new URLSearchParams();
@@ -178,6 +227,10 @@ function buildContactosUrl(params: {
 
   if (priority !== "all") {
     search.set("priority", priority);
+  }
+
+  if (source !== "all") {
+    search.set("source", source);
   }
 
   if (q) {
@@ -230,6 +283,10 @@ function hasFollowUpDate(value: string | null | undefined) {
   return /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
 }
 
+function hasLastContact(value: string | null | undefined) {
+  return Boolean((value ?? "").trim());
+}
+
 function getFollowUpSortDate(value: string | null | undefined) {
   if (!hasFollowUpDate(value)) return null;
   return String(value).trim();
@@ -280,13 +337,24 @@ function getFollowUpPriorityClasses(priority: FollowUpPriority) {
   return "border-zinc-200 bg-zinc-50 text-zinc-500";
 }
 
-function getContactCardClasses(priority: FollowUpPriority) {
+function getNoContactBadgeClasses() {
+  return "border-violet-200 bg-violet-50 text-violet-700";
+}
+
+function getContactCardClasses(
+  priority: FollowUpPriority,
+  withoutContact: boolean
+) {
   if (priority === "overdue") {
     return "rounded-[2rem] border border-red-300 bg-white p-6 shadow-sm ring-1 ring-red-100";
   }
 
   if (priority === "today") {
     return "rounded-[2rem] border border-amber-300 bg-white p-6 shadow-sm ring-1 ring-amber-100";
+  }
+
+  if (withoutContact) {
+    return "rounded-[2rem] border border-violet-300 bg-white p-6 shadow-sm ring-1 ring-violet-100";
   }
 
   return "rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-sm";
@@ -316,11 +384,32 @@ function getFollowUpBoxClasses(priority: FollowUpPriority) {
   return "rounded-2xl border border-zinc-200 bg-zinc-50 p-4";
 }
 
+function getLastContactBoxClasses(withoutContact: boolean) {
+  if (withoutContact) {
+    return "rounded-2xl border border-violet-200 bg-violet-50 p-4";
+  }
+
+  return "rounded-2xl border border-zinc-200 bg-zinc-50 p-4";
+}
+
 function getFollowUpRank(priority: FollowUpPriority) {
   if (priority === "overdue") return 0;
   if (priority === "today") return 1;
-  if (priority === "future") return 2;
-  return 3;
+  if (priority === "future") return 3;
+  return 4;
+}
+
+function getLeadAttentionRank(item: ContactRequestRow) {
+  const followUpPriority = getFollowUpPriority(
+    item.next_follow_up_on,
+    item.status
+  );
+
+  if (followUpPriority === "overdue") return 0;
+  if (followUpPriority === "today") return 1;
+  if (!hasLastContact(item.last_contact_at)) return 2;
+  if (followUpPriority === "future") return 3;
+  return 4;
 }
 
 export default async function AdminContactosPage({
@@ -341,6 +430,7 @@ export default async function AdminContactosPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const activeFilter = normalizeFilterStatus(resolvedSearchParams?.status);
   const activePriority = normalizeFilterPriority(resolvedSearchParams?.priority);
+  const activeSource = normalizeFilterSource(resolvedSearchParams?.source);
   const searchQuery = (resolvedSearchParams?.q ?? "").trim();
 
   async function updateContactRequestStatus(formData: FormData) {
@@ -364,6 +454,7 @@ export default async function AdminContactosPage({
     const rawPriority = String(formData.get("priority") ?? "")
       .trim()
       .toLowerCase();
+    const rawSource = String(formData.get("source") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
 
     const id = Number(rawId);
@@ -387,6 +478,7 @@ export default async function AdminContactosPage({
       buildContactosUrl({
         filter: rawFilter,
         priority: rawPriority,
+        source: rawSource,
         q: rawQuery,
       })
     );
@@ -412,6 +504,7 @@ export default async function AdminContactosPage({
     const rawPriority = String(formData.get("priority") ?? "")
       .trim()
       .toLowerCase();
+    const rawSource = String(formData.get("source") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
     const rawNotes = String(formData.get("internal_notes") ?? "");
 
@@ -435,6 +528,7 @@ export default async function AdminContactosPage({
       buildContactosUrl({
         filter: rawFilter,
         priority: rawPriority,
+        source: rawSource,
         q: rawQuery,
       })
     );
@@ -460,6 +554,7 @@ export default async function AdminContactosPage({
     const rawPriority = String(formData.get("priority") ?? "")
       .trim()
       .toLowerCase();
+    const rawSource = String(formData.get("source") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
 
     const id = Number(rawId);
@@ -482,6 +577,7 @@ export default async function AdminContactosPage({
       buildContactosUrl({
         filter: rawFilter,
         priority: rawPriority,
+        source: rawSource,
         q: rawQuery,
       })
     );
@@ -507,6 +603,7 @@ export default async function AdminContactosPage({
     const rawPriority = String(formData.get("priority") ?? "")
       .trim()
       .toLowerCase();
+    const rawSource = String(formData.get("source") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
     const rawDate = String(formData.get("next_follow_up_on") ?? "").trim();
 
@@ -530,6 +627,7 @@ export default async function AdminContactosPage({
       buildContactosUrl({
         filter: rawFilter,
         priority: rawPriority,
+        source: rawSource,
         q: rawQuery,
       })
     );
@@ -560,16 +658,33 @@ export default async function AdminContactosPage({
   ).length;
 
   const overdueCount = requests.filter(
-    (item) => getFollowUpPriority(item.next_follow_up_on, item.status) === "overdue"
+    (item) =>
+      getFollowUpPriority(item.next_follow_up_on, item.status) === "overdue"
   ).length;
 
   const todayCount = requests.filter(
-    (item) => getFollowUpPriority(item.next_follow_up_on, item.status) === "today"
+    (item) =>
+      getFollowUpPriority(item.next_follow_up_on, item.status) === "today"
   ).length;
 
   const withFollowUpCount = requests.filter((item) =>
     hasFollowUpDate(item.next_follow_up_on)
   ).length;
+
+  const withoutContactCount = requests.filter(
+    (item) => !hasLastContact(item.last_contact_at)
+  ).length;
+
+  const sourceCounts = requests.reduce<Record<string, number>>((acc, item) => {
+    const source = normalizeSourceValue(item.source);
+    acc[source] = (acc[source] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const sourceEntries = Object.entries(sourceCounts).sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return a[0].localeCompare(b[0]);
+  });
 
   const filteredRequests = requests
     .filter((item) => {
@@ -589,21 +704,34 @@ export default async function AdminContactosPage({
           ? followUpPriority === "overdue"
           : activePriority === "today"
           ? followUpPriority === "today"
-          : hasFollowUpDate(item.next_follow_up_on);
+          : activePriority === "with_follow_up"
+          ? hasFollowUpDate(item.next_follow_up_on)
+          : !hasLastContact(item.last_contact_at);
+
+      const sourceMatches =
+        activeSource === "all" ||
+        normalizeSourceValue(item.source) === activeSource;
 
       const queryMatches = matchesSearch(item, searchQuery);
 
-      return statusMatches && priorityMatches && queryMatches;
+      return statusMatches && priorityMatches && sourceMatches && queryMatches;
     })
     .sort((a, b) => {
-      const priorityA = getFollowUpPriority(a.next_follow_up_on, a.status);
-      const priorityB = getFollowUpPriority(b.next_follow_up_on, b.status);
-
-      const rankA = getFollowUpRank(priorityA);
-      const rankB = getFollowUpRank(priorityB);
+      const rankA = getLeadAttentionRank(a);
+      const rankB = getLeadAttentionRank(b);
 
       if (rankA !== rankB) {
         return rankA - rankB;
+      }
+
+      const priorityA = getFollowUpPriority(a.next_follow_up_on, a.status);
+      const priorityB = getFollowUpPriority(b.next_follow_up_on, b.status);
+
+      const followUpRankA = getFollowUpRank(priorityA);
+      const followUpRankB = getFollowUpRank(priorityB);
+
+      if (followUpRankA !== followUpRankB) {
+        return followUpRankA - followUpRankB;
       }
 
       const followUpDateA = getFollowUpSortDate(a.next_follow_up_on);
@@ -646,7 +774,7 @@ export default async function AdminContactosPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
           <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-zinc-500">Total</p>
             <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
@@ -675,6 +803,13 @@ export default async function AdminContactosPage({
             </p>
           </div>
 
+          <div className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
+            <p className="text-sm font-medium text-violet-700">Sin contactar</p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-violet-950">
+              {withoutContactCount}
+            </p>
+          </div>
+
           <div className="rounded-3xl border border-red-200 bg-red-50 p-5 shadow-sm">
             <p className="text-sm font-medium text-red-700">
               Seguimiento vencido
@@ -694,27 +829,41 @@ export default async function AdminContactosPage({
           </div>
         </div>
 
-        {overdueCount > 0 || todayCount > 0 ? (
+        {overdueCount > 0 || todayCount > 0 || withoutContactCount > 0 ? (
           <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold text-zinc-900">
-              Prioridad de seguimiento
+              Prioridad comercial
             </p>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              {overdueCount > 0
-                ? `${overdueCount} ${
-                    overdueCount === 1 ? "solicitud tiene" : "solicitudes tienen"
-                  } seguimiento vencido`
-                : "No hay seguimientos vencidos"}
-              {overdueCount > 0 && todayCount > 0 ? " y " : ". "}
-              {todayCount > 0
-                ? `${todayCount} ${
-                    todayCount === 1 ? "solicitud toca" : "solicitudes tocan"
-                  } hoy`
-                : overdueCount > 0
-                ? ""
-                : "No hay seguimientos para hoy."}
-              {todayCount > 0 ? "." : ""}
-            </p>
+
+            <div className="mt-3 space-y-2 text-sm leading-6 text-zinc-600">
+              <p>
+                {overdueCount > 0
+                  ? `${overdueCount} ${
+                      overdueCount === 1
+                        ? "solicitud tiene"
+                        : "solicitudes tienen"
+                    } seguimiento vencido.`
+                  : "No hay seguimientos vencidos."}
+              </p>
+
+              <p>
+                {todayCount > 0
+                  ? `${todayCount} ${
+                      todayCount === 1 ? "solicitud toca" : "solicitudes tocan"
+                    } hoy.`
+                  : "No hay seguimientos para hoy."}
+              </p>
+
+              <p>
+                {withoutContactCount > 0
+                  ? `${withoutContactCount} ${
+                      withoutContactCount === 1
+                        ? "solicitud sigue"
+                        : "solicitudes siguen"
+                    } sin contacto registrado.`
+                  : "No hay solicitudes sin contactar."}
+              </p>
+            </div>
           </div>
         ) : null}
 
@@ -742,6 +891,10 @@ export default async function AdminContactosPage({
                 <input type="hidden" name="priority" value={activePriority} />
               ) : null}
 
+              {activeSource !== "all" ? (
+                <input type="hidden" name="source" value={activeSource} />
+              ) : null}
+
               <button
                 type="submit"
                 className="rounded-2xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
@@ -753,6 +906,7 @@ export default async function AdminContactosPage({
                 href={buildContactosUrl({
                   filter: activeFilter,
                   priority: activePriority,
+                  source: activeSource,
                 })}
                 className="rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
               >
@@ -773,6 +927,7 @@ export default async function AdminContactosPage({
                 filter: "all",
                 q: searchQuery,
                 priority: activePriority,
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activeFilter === "all"
@@ -786,6 +941,7 @@ export default async function AdminContactosPage({
                 filter: "new",
                 q: searchQuery,
                 priority: activePriority,
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activeFilter === "new"
@@ -799,6 +955,7 @@ export default async function AdminContactosPage({
                 filter: "pending",
                 q: searchQuery,
                 priority: activePriority,
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activeFilter === "pending"
@@ -812,6 +969,7 @@ export default async function AdminContactosPage({
                 filter: "done",
                 q: searchQuery,
                 priority: activePriority,
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activeFilter === "done"
@@ -833,6 +991,7 @@ export default async function AdminContactosPage({
                 filter: activeFilter,
                 q: searchQuery,
                 priority: "all",
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activePriority === "all"
@@ -846,6 +1005,7 @@ export default async function AdminContactosPage({
                 filter: activeFilter,
                 q: searchQuery,
                 priority: "overdue",
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activePriority === "overdue"
@@ -859,6 +1019,7 @@ export default async function AdminContactosPage({
                 filter: activeFilter,
                 q: searchQuery,
                 priority: "today",
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activePriority === "today"
@@ -871,7 +1032,22 @@ export default async function AdminContactosPage({
               href={buildContactosUrl({
                 filter: activeFilter,
                 q: searchQuery,
+                priority: "without_contact",
+                source: activeSource,
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activePriority === "without_contact"
+              )}`}
+            >
+              Sin contactar ({withoutContactCount})
+            </Link>
+
+            <Link
+              href={buildContactosUrl({
+                filter: activeFilter,
+                q: searchQuery,
                 priority: "with_follow_up",
+                source: activeSource,
               })}
               className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
                 activePriority === "with_follow_up"
@@ -879,6 +1055,45 @@ export default async function AdminContactosPage({
             >
               Con seguimiento ({withFollowUpCount})
             </Link>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <p className="text-sm font-semibold text-zinc-900">
+            Filtros de fuente
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href={buildContactosUrl({
+                filter: activeFilter,
+                q: searchQuery,
+                priority: activePriority,
+                source: "all",
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activeSource === "all"
+              )}`}
+            >
+              Todas
+            </Link>
+
+            {sourceEntries.map(([source, count]) => (
+              <Link
+                key={source}
+                href={buildContactosUrl({
+                  filter: activeFilter,
+                  q: searchQuery,
+                  priority: activePriority,
+                  source,
+                })}
+                className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                  activeSource === source
+                )}`}
+              >
+                {normalizeSourceLabel(source)} ({count})
+              </Link>
+            ))}
           </div>
         </div>
 
@@ -907,11 +1122,15 @@ export default async function AdminContactosPage({
                 item.next_follow_up_on,
                 item.status
               );
+              const withoutContact = !hasLastContact(item.last_contact_at);
 
               return (
                 <article
                   key={item.id}
-                  className={getContactCardClasses(followUpPriority)}
+                  className={getContactCardClasses(
+                    followUpPriority,
+                    withoutContact
+                  )}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
@@ -937,6 +1156,22 @@ export default async function AdminContactosPage({
                             {getFollowUpPriorityLabel(followUpPriority)}
                           </span>
                         ) : null}
+
+                        {withoutContact ? (
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getNoContactBadgeClasses()}`}
+                          >
+                            Sin contactar
+                          </span>
+                        ) : null}
+
+                        <span
+                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getSourceClasses(
+                            item.source
+                          )}`}
+                        >
+                          {normalizeSourceLabel(item.source)}
+                        </span>
                       </div>
 
                       <p className="mt-2 text-sm text-zinc-500">
@@ -985,6 +1220,18 @@ export default async function AdminContactosPage({
                     </div>
                   ) : null}
 
+                  {withoutContact ? (
+                    <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                      <p className="text-sm font-semibold text-violet-800">
+                        Sin contacto registrado
+                      </p>
+                      <p className="mt-1 text-sm text-violet-700">
+                        Todavía no se ha marcado ninguna llamada, email o primer
+                        seguimiento para este lead.
+                      </p>
+                    </div>
+                  ) : null}
+
                   <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -1022,12 +1269,24 @@ export default async function AdminContactosPage({
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    <div className={getLastContactBoxClasses(withoutContact)}>
+                      <p
+                        className={`text-xs font-medium uppercase tracking-wide ${
+                          withoutContact ? "text-violet-700" : "text-zinc-500"
+                        }`}
+                      >
                         Último contacto
                       </p>
-                      <p className="mt-2 text-sm text-zinc-900">
-                        {formatDateTime(item.last_contact_at)}
+                      <p
+                        className={`mt-2 text-sm ${
+                          withoutContact
+                            ? "font-semibold text-violet-900"
+                            : "text-zinc-900"
+                        }`}
+                      >
+                        {withoutContact
+                          ? "Sin contacto todavía"
+                          : formatDateTime(item.last_contact_at)}
                       </p>
                     </div>
 
@@ -1085,6 +1344,7 @@ export default async function AdminContactosPage({
                           name="priority"
                           value={activePriority}
                         />
+                        <input type="hidden" name="source" value={activeSource} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1108,6 +1368,7 @@ export default async function AdminContactosPage({
                           name="priority"
                           value={activePriority}
                         />
+                        <input type="hidden" name="source" value={activeSource} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1131,6 +1392,7 @@ export default async function AdminContactosPage({
                           name="priority"
                           value={activePriority}
                         />
+                        <input type="hidden" name="source" value={activeSource} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1153,6 +1415,7 @@ export default async function AdminContactosPage({
                           name="priority"
                           value={activePriority}
                         />
+                        <input type="hidden" name="source" value={activeSource} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1186,6 +1449,7 @@ export default async function AdminContactosPage({
                         name="priority"
                         value={activePriority}
                       />
+                      <input type="hidden" name="source" value={activeSource} />
                       <input type="hidden" name="q" value={searchQuery} />
 
                       <div className="flex flex-col gap-3 md:flex-row">
@@ -1224,6 +1488,7 @@ export default async function AdminContactosPage({
                         name="priority"
                         value={activePriority}
                       />
+                      <input type="hidden" name="source" value={activeSource} />
                       <input type="hidden" name="q" value={searchQuery} />
 
                       <textarea
@@ -1247,7 +1512,7 @@ export default async function AdminContactosPage({
 
                   <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
                     <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
-                      Fuente: {item.source || "web"}
+                      Fuente: {normalizeSourceLabel(item.source)}
                     </span>
                     <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
                       ID: {item.id}
