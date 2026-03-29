@@ -24,10 +24,12 @@ type AdminContactosPageProps = {
   searchParams?: Promise<{
     status?: string;
     q?: string;
+    priority?: string;
   }>;
 };
 
 type FollowUpPriority = "none" | "future" | "today" | "overdue";
+type FollowUpFilter = "all" | "overdue" | "today" | "with_follow_up";
 
 const CONTACT_ADMIN_EMAILS = (
   process.env.CONTACT_ADMIN_EMAILS?.split(",") ?? [
@@ -141,20 +143,39 @@ function normalizeFilterStatus(value: string | null | undefined) {
   return "all";
 }
 
+function normalizeFilterPriority(value: string | null | undefined): FollowUpFilter {
+  const normalized = (value ?? "").trim().toLowerCase();
+
+  if (normalized === "overdue") return "overdue";
+  if (normalized === "today") return "today";
+  if (normalized === "with_follow_up") return "with_follow_up";
+
+  return "all";
+}
+
 function getFilterLinkClasses(active: boolean) {
   return active
     ? "border-black bg-black text-white"
     : "border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50";
 }
 
-function buildContactosUrl(params: { filter?: string; q?: string }) {
+function buildContactosUrl(params: {
+  filter?: string;
+  q?: string;
+  priority?: string;
+}) {
   const filter = normalizeFilterStatus(params.filter);
+  const priority = normalizeFilterPriority(params.priority);
   const q = (params.q ?? "").trim();
 
   const search = new URLSearchParams();
 
   if (filter !== "all") {
     search.set("status", filter);
+  }
+
+  if (priority !== "all") {
+    search.set("priority", priority);
   }
 
   if (q) {
@@ -202,13 +223,18 @@ function getTodayDateInMadrid() {
   return `${year}-${month}-${day}`;
 }
 
+function hasFollowUpDate(value: string | null | undefined) {
+  const rawDate = (value ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+}
+
 function getFollowUpPriority(
   value: string | null | undefined,
   status: string | null | undefined
 ): FollowUpPriority {
   const rawDate = (value ?? "").trim();
 
-  if (!rawDate || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+  if (!hasFollowUpDate(rawDate)) {
     return "none";
   }
 
@@ -307,6 +333,7 @@ export default async function AdminContactosPage({
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const activeFilter = normalizeFilterStatus(resolvedSearchParams?.status);
+  const activePriority = normalizeFilterPriority(resolvedSearchParams?.priority);
   const searchQuery = (resolvedSearchParams?.q ?? "").trim();
 
   async function updateContactRequestStatus(formData: FormData) {
@@ -327,6 +354,7 @@ export default async function AdminContactosPage({
     const rawId = String(formData.get("id") ?? "");
     const rawStatus = String(formData.get("status") ?? "").trim().toLowerCase();
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
 
     const id = Number(rawId);
@@ -346,7 +374,13 @@ export default async function AdminContactosPage({
 
     revalidatePath("/admin/contactos");
     revalidatePath("/dashboard");
-    redirect(buildContactosUrl({ filter: rawFilter, q: rawQuery }));
+    redirect(
+      buildContactosUrl({
+        filter: rawFilter,
+        priority: rawPriority,
+        q: rawQuery,
+      })
+    );
   }
 
   async function saveInternalNotes(formData: FormData) {
@@ -366,6 +400,7 @@ export default async function AdminContactosPage({
 
     const rawId = String(formData.get("id") ?? "");
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
     const rawNotes = String(formData.get("internal_notes") ?? "");
 
@@ -385,7 +420,13 @@ export default async function AdminContactosPage({
       .eq("id", id);
 
     revalidatePath("/admin/contactos");
-    redirect(buildContactosUrl({ filter: rawFilter, q: rawQuery }));
+    redirect(
+      buildContactosUrl({
+        filter: rawFilter,
+        priority: rawPriority,
+        q: rawQuery,
+      })
+    );
   }
 
   async function markLastContactNow(formData: FormData) {
@@ -405,6 +446,7 @@ export default async function AdminContactosPage({
 
     const rawId = String(formData.get("id") ?? "");
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
 
     const id = Number(rawId);
@@ -423,7 +465,13 @@ export default async function AdminContactosPage({
 
     revalidatePath("/admin/contactos");
     revalidatePath("/dashboard");
-    redirect(buildContactosUrl({ filter: rawFilter, q: rawQuery }));
+    redirect(
+      buildContactosUrl({
+        filter: rawFilter,
+        priority: rawPriority,
+        q: rawQuery,
+      })
+    );
   }
 
   async function saveNextFollowUp(formData: FormData) {
@@ -443,6 +491,7 @@ export default async function AdminContactosPage({
 
     const rawId = String(formData.get("id") ?? "");
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
     const rawDate = String(formData.get("next_follow_up_on") ?? "").trim();
 
@@ -461,7 +510,13 @@ export default async function AdminContactosPage({
       .eq("id", id);
 
     revalidatePath("/admin/contactos");
-    redirect(buildContactosUrl({ filter: rawFilter, q: rawQuery }));
+    redirect(
+      buildContactosUrl({
+        filter: rawFilter,
+        priority: rawPriority,
+        q: rawQuery,
+      })
+    );
   }
 
   const supabaseAdmin = getSupabaseAdmin();
@@ -496,15 +551,33 @@ export default async function AdminContactosPage({
     (item) => getFollowUpPriority(item.next_follow_up_on, item.status) === "today"
   ).length;
 
+  const withFollowUpCount = requests.filter((item) =>
+    hasFollowUpDate(item.next_follow_up_on)
+  ).length;
+
   const filteredRequests = requests
     .filter((item) => {
       const statusMatches =
         activeFilter === "all" ||
         normalizeStatusValue(item.status) === activeFilter;
 
+      const followUpPriority = getFollowUpPriority(
+        item.next_follow_up_on,
+        item.status
+      );
+
+      const priorityMatches =
+        activePriority === "all"
+          ? true
+          : activePriority === "overdue"
+          ? followUpPriority === "overdue"
+          : activePriority === "today"
+          ? followUpPriority === "today"
+          : hasFollowUpDate(item.next_follow_up_on);
+
       const queryMatches = matchesSearch(item, searchQuery);
 
-      return statusMatches && queryMatches;
+      return statusMatches && priorityMatches && queryMatches;
     })
     .sort((a, b) => {
       const priorityA = getFollowUpPriority(a.next_follow_up_on, a.status);
@@ -641,6 +714,10 @@ export default async function AdminContactosPage({
                 <input type="hidden" name="status" value={activeFilter} />
               ) : null}
 
+              {activePriority !== "all" ? (
+                <input type="hidden" name="priority" value={activePriority} />
+              ) : null}
+
               <button
                 type="submit"
                 className="rounded-2xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
@@ -649,7 +726,10 @@ export default async function AdminContactosPage({
               </button>
 
               <Link
-                href={buildContactosUrl({ filter: activeFilter })}
+                href={buildContactosUrl({
+                  filter: activeFilter,
+                  priority: activePriority,
+                })}
                 className="rounded-2xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
               >
                 Limpiar búsqueda
@@ -658,42 +738,124 @@ export default async function AdminContactosPage({
           </form>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href={buildContactosUrl({ filter: "all", q: searchQuery })}
-            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
-              activeFilter === "all"
-            )}`}
-          >
-            Todas ({requests.length})
-          </Link>
+        <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <p className="text-sm font-semibold text-zinc-900">
+            Filtros de estado
+          </p>
 
-          <Link
-            href={buildContactosUrl({ filter: "new", q: searchQuery })}
-            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
-              activeFilter === "new"
-            )}`}
-          >
-            Nuevas ({newCount})
-          </Link>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href={buildContactosUrl({
+                filter: "all",
+                q: searchQuery,
+                priority: activePriority,
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activeFilter === "all"
+              )}`}
+            >
+              Todas ({requests.length})
+            </Link>
 
-          <Link
-            href={buildContactosUrl({ filter: "pending", q: searchQuery })}
-            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
-              activeFilter === "pending"
-            )}`}
-          >
-            Pendientes ({pendingCount})
-          </Link>
+            <Link
+              href={buildContactosUrl({
+                filter: "new",
+                q: searchQuery,
+                priority: activePriority,
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activeFilter === "new"
+              )}`}
+            >
+              Nuevas ({newCount})
+            </Link>
 
-          <Link
-            href={buildContactosUrl({ filter: "done", q: searchQuery })}
-            className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
-              activeFilter === "done"
-            )}`}
-          >
-            Atendidas ({doneCount})
-          </Link>
+            <Link
+              href={buildContactosUrl({
+                filter: "pending",
+                q: searchQuery,
+                priority: activePriority,
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activeFilter === "pending"
+              )}`}
+            >
+              Pendientes ({pendingCount})
+            </Link>
+
+            <Link
+              href={buildContactosUrl({
+                filter: "done",
+                q: searchQuery,
+                priority: activePriority,
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activeFilter === "done"
+              )}`}
+            >
+              Atendidas ({doneCount})
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <p className="text-sm font-semibold text-zinc-900">
+            Filtros de prioridad
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href={buildContactosUrl({
+                filter: activeFilter,
+                q: searchQuery,
+                priority: "all",
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activePriority === "all"
+              )}`}
+            >
+              Todas
+            </Link>
+
+            <Link
+              href={buildContactosUrl({
+                filter: activeFilter,
+                q: searchQuery,
+                priority: "overdue",
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activePriority === "overdue"
+              )}`}
+            >
+              Vencidos ({overdueCount})
+            </Link>
+
+            <Link
+              href={buildContactosUrl({
+                filter: activeFilter,
+                q: searchQuery,
+                priority: "today",
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activePriority === "today"
+              )}`}
+            >
+              Hoy ({todayCount})
+            </Link>
+
+            <Link
+              href={buildContactosUrl({
+                filter: activeFilter,
+                q: searchQuery,
+                priority: "with_follow_up",
+              })}
+              className={`rounded-2xl border px-4 py-2 text-sm font-medium transition ${getFilterLinkClasses(
+                activePriority === "with_follow_up"
+              )}`}
+            >
+              Con seguimiento ({withFollowUpCount})
+            </Link>
+          </div>
         </div>
 
         {error ? (
@@ -708,7 +870,7 @@ export default async function AdminContactosPage({
               No hay solicitudes para este filtro o búsqueda
             </p>
             <p className="mt-3 text-sm leading-6 text-zinc-600">
-              Cambia el filtro, limpia la búsqueda o espera a que lleguen nuevas
+              Cambia los filtros, limpia la búsqueda o espera a que lleguen nuevas
               solicitudes.
             </p>
           </div>
@@ -895,6 +1057,7 @@ export default async function AdminContactosPage({
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="status" value="new" />
                         <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="priority" value={activePriority} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -913,6 +1076,7 @@ export default async function AdminContactosPage({
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="status" value="pending" />
                         <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="priority" value={activePriority} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -931,6 +1095,7 @@ export default async function AdminContactosPage({
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="status" value="done" />
                         <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="priority" value={activePriority} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -948,6 +1113,7 @@ export default async function AdminContactosPage({
                       <form action={markLastContactNow}>
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="priority" value={activePriority} />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -976,6 +1142,7 @@ export default async function AdminContactosPage({
                     <form action={saveNextFollowUp} className="mt-3">
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="filter" value={activeFilter} />
+                      <input type="hidden" name="priority" value={activePriority} />
                       <input type="hidden" name="q" value={searchQuery} />
 
                       <div className="flex flex-col gap-3 md:flex-row">
@@ -1009,6 +1176,7 @@ export default async function AdminContactosPage({
                     <form action={saveInternalNotes} className="mt-3">
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="filter" value={activeFilter} />
+                      <input type="hidden" name="priority" value={activePriority} />
                       <input type="hidden" name="q" value={searchQuery} />
 
                       <textarea
