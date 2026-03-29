@@ -3,22 +3,22 @@ import { Suspense } from "react";
 import LoginPageClient from "./LoginPageClient";
 
 export const metadata: Metadata = {
-  title: "Entrar | Peluque-Guía",
+  title: "Entrar | PeluqueGuía",
   description:
-    "Accede a Peluque-Guía para gestionar reservas, clientes, empleados, servicios y la operativa diaria de tu peluquería desde un panel profesional y claro.",
+    "Accede a PeluqueGuía para gestionar reservas, clientes, empleados, servicios y la operativa diaria de tu peluquería desde un panel profesional y claro.",
   alternates: {
     canonical: "/login",
   },
   openGraph: {
-    title: "Entrar | Peluque-Guía",
+    title: "Entrar | PeluqueGuía",
     description:
-      "Accede a Peluque-Guía para gestionar reservas, clientes, empleados, servicios y la operativa diaria de tu peluquería desde un panel profesional y claro.",
+      "Accede a PeluqueGuía para gestionar reservas, clientes, empleados, servicios y la operativa diaria de tu peluquería desde un panel profesional y claro.",
     url: "/login",
   },
   twitter: {
-    title: "Entrar | Peluque-Guía",
+    title: "Entrar | PeluqueGuía",
     description:
-      "Accede a Peluque-Guía para gestionar reservas, clientes, empleados, servicios y la operativa diaria de tu peluquería desde un panel profesional y claro.",
+      "Accede a PeluqueGuía para gestionar reservas, clientes, empleados, servicios y la operativa diaria de tu peluquería desde un panel profesional y claro.",
   },
 };
 
@@ -30,7 +30,7 @@ function LoginPageFallback() {
           <div className="hidden rounded-[2rem] border border-zinc-200 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-10 text-white shadow-sm lg:block">
             <div className="max-w-xl">
               <p className="text-sm font-medium text-white/70">
-                Peluque-Guía
+                PeluqueGuía
               </p>
               <h1 className="mt-4 text-4xl font-bold tracking-tight">
                 Accede a tu panel de gestión

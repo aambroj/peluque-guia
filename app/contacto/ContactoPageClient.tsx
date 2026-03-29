@@ -7,7 +7,7 @@ const contactReasons = [
   {
     title: "Solicitar una demo",
     description:
-      "Para ver cómo encaja Peluque-Guía en tu salón antes de empezar.",
+      "Para ver cómo encaja PeluqueGuía en tu salón antes de empezar.",
   },
   {
     title: "Resolver dudas",
@@ -121,7 +121,7 @@ export default function ContactoPageClient() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5 lg:px-8">
           <div>
             <p className="text-lg font-semibold tracking-tight text-zinc-900">
-              Peluque-Guía
+              PeluqueGuía
             </p>
             <p className="text-sm text-zinc-500">
               Contacto, información y solicitud de demo
@@ -155,7 +155,7 @@ export default function ContactoPageClient() {
             </div>
 
             <h1 className="mt-6 max-w-4xl text-4xl font-bold leading-tight tracking-tight text-zinc-900 sm:text-5xl">
-              Solicita información o una demo de Peluque-Guía
+              Solicita información o una demo de PeluqueGuía
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">

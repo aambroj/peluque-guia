@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import RecuperarContrasenaPageClient from "./RecuperarContrasenaPageClient";
 
 export const metadata: Metadata = {
-  title: "Recuperar contraseña | Peluque-Guía",
+  title: "Recuperar contraseña | PeluqueGuía",
   description:
-    "Solicita un enlace para restablecer la contraseña de tu cuenta de Peluque-Guía.",
+    "Solicita un enlace para restablecer la contraseña de tu cuenta de PeluqueGuía.",
   alternates: {
     canonical: "/recuperar-contrasena",
   },

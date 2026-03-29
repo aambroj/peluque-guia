@@ -9,7 +9,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "https://peluque-guia.vercel.app";
+  "https://www.peluqueguia.es";
 
 function normalizeText(value: string) {
   return value
@@ -829,7 +829,7 @@ export default async function CuentaPage() {
                   {accessEmail ?? "Sin email de acceso"}
                 </p>
                 <p className="mt-2 text-sm text-zinc-500">
-                  Este es el correo con el que entras en Peluque-Guía y con el
+                  Este es el correo con el que entras en PeluqueGuía y con el
                   que recuperas tu contraseña.
                 </p>
 

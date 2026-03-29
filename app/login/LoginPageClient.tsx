@@ -86,7 +86,7 @@ export default function LoginPageClient() {
 
             <div className="relative">
               <div className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/80">
-                Peluque-Guía · Gestión profesional para peluquerías
+                PeluqueGuía · Gestión profesional para peluquerías
               </div>
 
               <h1 className="mt-6 max-w-3xl text-5xl font-bold leading-tight tracking-tight">
@@ -214,7 +214,7 @@ export default function LoginPageClient() {
             <div className="px-8 py-8 sm:px-10">
               <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
                 <p className="text-sm font-semibold text-zinc-900">
-                  Peluque-Guía
+                  PeluqueGuía
                 </p>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
                   Gestiona tu salón, tus reservas online y tu equipo desde una
@@ -296,7 +296,7 @@ export default function LoginPageClient() {
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                   <p className="text-sm font-medium text-zinc-900">
-                    ¿Todavía no usas Peluque-Guía?
+                    ¿Todavía no usas PeluqueGuía?
                   </p>
                   <p className="mt-1 text-sm text-zinc-600">
                     Crea tu negocio y empieza a configurar tu salón.

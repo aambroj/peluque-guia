@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "https://peluque-guia.vercel.app";
+  "https://www.peluqueguia.es";
 
 function slugify(value: string) {
   return value
@@ -126,7 +126,7 @@ export default function RegistroPageClient() {
 
             <div className="relative">
               <div className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white/80">
-                Peluque-Guía · Alta de nuevo negocio
+                PeluqueGuía · Alta de nuevo negocio
               </div>
 
               <h1 className="mt-6 max-w-3xl text-5xl font-bold leading-tight tracking-tight">
@@ -254,7 +254,7 @@ export default function RegistroPageClient() {
             <div className="px-8 py-8 sm:px-10">
               <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
                 <p className="text-sm font-semibold text-zinc-900">
-                  Peluque-Guía
+                  PeluqueGuía
                 </p>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">
                   Crea tu negocio, activa tu acceso y empieza a gestionar

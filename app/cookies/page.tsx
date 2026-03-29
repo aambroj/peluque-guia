@@ -13,7 +13,7 @@ export default function CookiesPage() {
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-5 lg:px-8">
           <div>
             <p className="text-lg font-semibold tracking-tight text-zinc-900">
-              Peluque-Guía
+              PeluqueGuía
             </p>
             <p className="text-sm text-zinc-500">Política de cookies</p>
           </div>
@@ -35,7 +35,7 @@ export default function CookiesPage() {
 
           <div className="mt-6 space-y-6 text-sm leading-7 text-zinc-600">
             <p>
-              En Peluque-Guía podemos utilizar cookies y tecnologías similares
+              En PeluqueGuía podemos utilizar cookies y tecnologías similares
               para mejorar la experiencia de navegación, recordar preferencias,
               analizar el uso de la web y ofrecer un funcionamiento más estable
               del servicio.

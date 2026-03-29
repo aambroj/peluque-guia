@@ -3,12 +3,12 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Peluque-Guía",
-    template: "%s | Peluque-Guía",
+    default: "PeluqueGuía",
+    template: "%s | PeluqueGuía",
   },
   description:
     "Software web para peluquerías: reservas, clientes, empleados, servicios y gestión del negocio en un solo panel.",
-  applicationName: "Peluque-Guía",
+  applicationName: "PeluqueGuía",
 };
 
 export default function RootLayout({

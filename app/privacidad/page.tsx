@@ -3,7 +3,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Política de privacidad",
   description:
-    "Información sobre el tratamiento de datos personales en Peluque-Guía.",
+    "Información sobre el tratamiento de datos personales en PeluqueGuía.",
 };
 
 export default function PrivacidadPage() {
@@ -13,7 +13,7 @@ export default function PrivacidadPage() {
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-5 lg:px-8">
           <div>
             <p className="text-lg font-semibold tracking-tight text-zinc-900">
-              Peluque-Guía
+              PeluqueGuía
             </p>
             <p className="text-sm text-zinc-500">Política de privacidad</p>
           </div>
@@ -35,7 +35,7 @@ export default function PrivacidadPage() {
 
           <div className="mt-6 space-y-6 text-sm leading-7 text-zinc-600">
             <p>
-              En Peluque-Guía respetamos la privacidad de los usuarios y nos
+              En PeluqueGuía respetamos la privacidad de los usuarios y nos
               comprometemos a tratar los datos personales de forma responsable,
               segura y conforme a la normativa aplicable.
             </p>
@@ -46,7 +46,7 @@ export default function PrivacidadPage() {
               </h2>
               <p className="mt-2">
                 El responsable del tratamiento de los datos es el titular del
-                servicio Peluque-Guía.
+                servicio PeluqueGuía.
               </p>
               <div className="mt-2 space-y-1">
                 <p>Alberto Ambroj López</p>
@@ -70,7 +70,7 @@ export default function PrivacidadPage() {
                 Datos que pueden recogerse
               </h2>
               <p className="mt-2">
-                Dependiendo del uso del servicio, Peluque-Guía puede tratar
+                Dependiendo del uso del servicio, PeluqueGuía puede tratar
                 datos como nombre, correo electrónico, teléfono, datos del
                 negocio, datos de clientes, empleados, reservas y cualquier otra
                 información introducida por el usuario dentro de la plataforma.

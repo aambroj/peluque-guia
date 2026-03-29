@@ -608,7 +608,7 @@ export default async function AdminContactosPage({
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">
               Aquí puedes revisar los mensajes enviados desde la página pública
-              de contacto y las peticiones de demo de Peluque-Guía.
+              de contacto y las peticiones de demo de PeluqueGuía.
             </p>
           </div>
 

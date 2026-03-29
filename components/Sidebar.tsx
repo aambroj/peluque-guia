@@ -218,7 +218,7 @@ export default function Sidebar() {
         <div className="border-b border-zinc-200 px-6 py-6">
           <Link href={homeHref} className="block">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-              Peluque-Guía
+              PeluqueGuía
             </p>
             <h2 className="mt-2 text-xl font-bold tracking-tight text-zinc-900">
               Panel de gestión

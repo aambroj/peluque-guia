@@ -3,7 +3,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Términos y condiciones",
   description:
-    "Condiciones generales de uso de la plataforma Peluque-Guía.",
+    "Condiciones generales de uso de la plataforma PeluqueGuía.",
 };
 
 export default function TerminosPage() {
@@ -13,7 +13,7 @@ export default function TerminosPage() {
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-5 lg:px-8">
           <div>
             <p className="text-lg font-semibold tracking-tight text-zinc-900">
-              Peluque-Guía
+              PeluqueGuía
             </p>
             <p className="text-sm text-zinc-500">Términos y condiciones</p>
           </div>
@@ -35,7 +35,7 @@ export default function TerminosPage() {
 
           <div className="mt-6 space-y-6 text-sm leading-7 text-zinc-600">
             <p>
-              El acceso y uso de Peluque-Guía implica la aceptación de estos
+              El acceso y uso de PeluqueGuía implica la aceptación de estos
               términos y condiciones. El usuario se compromete a utilizar la
               plataforma de forma lícita, responsable y conforme a su finalidad.
             </p>
@@ -45,7 +45,7 @@ export default function TerminosPage() {
                 Objeto del servicio
               </h2>
               <p className="mt-2">
-                Peluque-Guía es una plataforma orientada a la gestión de
+                PeluqueGuía es una plataforma orientada a la gestión de
                 peluquerías y negocios similares, permitiendo organizar
                 reservas, clientes, empleados, servicios y otras funciones
                 relacionadas con la actividad del negocio.
@@ -115,7 +115,7 @@ export default function TerminosPage() {
                 Responsabilidad
               </h2>
               <p className="mt-2">
-                Peluque-Guía se ofrece como herramienta de apoyo a la gestión
+                PeluqueGuía se ofrece como herramienta de apoyo a la gestión
                 del negocio. El usuario sigue siendo responsable del uso que
                 haga de la información, de la relación con sus clientes y de la
                 correcta configuración de su operativa.
@@ -128,7 +128,7 @@ export default function TerminosPage() {
               </h2>
               <p className="mt-2">
                 Los contenidos, diseño, marca, código y elementos del servicio,
-                salvo que se indique lo contrario, pertenecen a Peluque-Guía o
+                salvo que se indique lo contrario, pertenecen a PeluqueGuía o
                 a sus legítimos titulares y no podrán utilizarse sin
                 autorización.
               </p>

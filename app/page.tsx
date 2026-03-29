@@ -122,7 +122,7 @@ const faqs = [
   {
     question: "¿Necesito instalar algo en el ordenador?",
     answer:
-      "No. Peluque-Guía funciona como software web, así que puedes acceder desde el navegador sin instalaciones complicadas.",
+      "No. PeluqueGuía funciona como software web, así que puedes acceder desde el navegador sin instalaciones complicadas.",
   },
   {
     question: "¿Puedo usarlo aunque tenga un salón pequeño?",
@@ -209,7 +209,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5 lg:px-8">
           <div>
             <p className="text-lg font-semibold tracking-tight text-zinc-900">
-              Peluque-Guía
+              PeluqueGuía
             </p>
             <p className="text-sm text-zinc-500">
               Software web para peluquerías
@@ -275,7 +275,7 @@ export default function HomePage() {
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-              Peluque-Guía te ayuda a gestionar reservas, clientes, equipo,
+              PeluqueGuía te ayuda a gestionar reservas, clientes, equipo,
               servicios y reserva online desde un solo panel. Menos
               improvisación, mejor imagen y una operativa mucho más ordenada.
             </p>
@@ -443,7 +443,7 @@ export default function HomePage() {
               Lo que necesitas para gestionar mejor tu peluquería
             </h2>
             <p className="mt-4 text-base leading-7 text-zinc-600">
-              Peluque-Guía está pensado para cubrir la operativa real de un
+              PeluqueGuía está pensado para cubrir la operativa real de un
               salón: citas, clientes, equipo, servicios y reserva online.
             </p>
           </div>
@@ -873,7 +873,7 @@ export default function HomePage() {
 
           <div className="mt-8 rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm">
             <div className="flex flex-col gap-4 text-sm text-zinc-500 md:flex-row md:items-center md:justify-between">
-              <p>© Peluque-Guía. Gestión profesional para peluquerías.</p>
+              <p>© PeluqueGuía. Gestión profesional para peluquerías.</p>
 
               <div className="flex flex-wrap gap-4">
                 <Link

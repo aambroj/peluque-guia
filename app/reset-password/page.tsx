@@ -3,9 +3,9 @@ import { Suspense } from "react";
 import ResetPasswordPageClient from "./ResetPasswordPageClient";
 
 export const metadata: Metadata = {
-  title: "Nueva contraseña | Peluque-Guía",
+  title: "Nueva contraseña | PeluqueGuía",
   description:
-    "Crea una nueva contraseña para volver a acceder a tu cuenta de Peluque-Guía.",
+    "Crea una nueva contraseña para volver a acceder a tu cuenta de PeluqueGuía.",
   alternates: {
     canonical: "/reset-password",
   },

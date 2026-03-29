@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "https://peluque-guia.vercel.app";
+  "https://www.peluqueguia.es";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
