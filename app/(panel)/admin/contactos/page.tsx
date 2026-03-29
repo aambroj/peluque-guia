@@ -27,6 +27,8 @@ type AdminContactosPageProps = {
   }>;
 };
 
+type FollowUpPriority = "none" | "future" | "today" | "overdue";
+
 const CONTACT_ADMIN_EMAILS = (
   process.env.CONTACT_ADMIN_EMAILS?.split(",") ?? [
     "alber.ambroj@gmail.com",
@@ -183,6 +185,109 @@ function matchesSearch(item: ContactRequestRow, rawQuery: string) {
     .join(" ");
 
   return haystack.includes(query);
+}
+
+function getTodayDateInMadrid() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+
+  return `${year}-${month}-${day}`;
+}
+
+function getFollowUpPriority(
+  value: string | null | undefined,
+  status: string | null | undefined
+): FollowUpPriority {
+  const rawDate = (value ?? "").trim();
+
+  if (!rawDate || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    return "none";
+  }
+
+  if (normalizeStatusValue(status) === "done") {
+    return "future";
+  }
+
+  const today = getTodayDateInMadrid();
+
+  if (rawDate < today) return "overdue";
+  if (rawDate === today) return "today";
+
+  return "future";
+}
+
+function getFollowUpPriorityLabel(priority: FollowUpPriority) {
+  if (priority === "overdue") return "Seguimiento vencido";
+  if (priority === "today") return "Seguimiento hoy";
+  if (priority === "future") return "Seguimiento programado";
+  return "Sin seguimiento";
+}
+
+function getFollowUpPriorityClasses(priority: FollowUpPriority) {
+  if (priority === "overdue") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (priority === "today") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (priority === "future") {
+    return "border-zinc-200 bg-zinc-50 text-zinc-700";
+  }
+
+  return "border-zinc-200 bg-zinc-50 text-zinc-500";
+}
+
+function getContactCardClasses(priority: FollowUpPriority) {
+  if (priority === "overdue") {
+    return "rounded-[2rem] border border-red-300 bg-white p-6 shadow-sm ring-1 ring-red-100";
+  }
+
+  if (priority === "today") {
+    return "rounded-[2rem] border border-amber-300 bg-white p-6 shadow-sm ring-1 ring-amber-100";
+  }
+
+  return "rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-sm";
+}
+
+function getFollowUpPanelClasses(priority: FollowUpPriority) {
+  if (priority === "overdue") {
+    return "border-red-200 bg-red-50";
+  }
+
+  if (priority === "today") {
+    return "border-amber-200 bg-amber-50";
+  }
+
+  return "border-zinc-200 bg-white";
+}
+
+function getFollowUpBoxClasses(priority: FollowUpPriority) {
+  if (priority === "overdue") {
+    return "rounded-2xl border border-red-200 bg-red-50 p-4";
+  }
+
+  if (priority === "today") {
+    return "rounded-2xl border border-amber-200 bg-amber-50 p-4";
+  }
+
+  return "rounded-2xl border border-zinc-200 bg-zinc-50 p-4";
+}
+
+function getFollowUpRank(priority: FollowUpPriority) {
+  if (priority === "overdue") return 0;
+  if (priority === "today") return 1;
+  if (priority === "future") return 2;
+  return 3;
 }
 
 export default async function AdminContactosPage({
@@ -383,14 +488,39 @@ export default async function AdminContactosPage({
     (item) => normalizeStatusValue(item.status) === "done"
   ).length;
 
-  const filteredRequests = requests.filter((item) => {
-    const statusMatches =
-      activeFilter === "all" || normalizeStatusValue(item.status) === activeFilter;
+  const overdueCount = requests.filter(
+    (item) => getFollowUpPriority(item.next_follow_up_on, item.status) === "overdue"
+  ).length;
 
-    const queryMatches = matchesSearch(item, searchQuery);
+  const todayCount = requests.filter(
+    (item) => getFollowUpPriority(item.next_follow_up_on, item.status) === "today"
+  ).length;
 
-    return statusMatches && queryMatches;
-  });
+  const filteredRequests = requests
+    .filter((item) => {
+      const statusMatches =
+        activeFilter === "all" ||
+        normalizeStatusValue(item.status) === activeFilter;
+
+      const queryMatches = matchesSearch(item, searchQuery);
+
+      return statusMatches && queryMatches;
+    })
+    .sort((a, b) => {
+      const priorityA = getFollowUpPriority(a.next_follow_up_on, a.status);
+      const priorityB = getFollowUpPriority(b.next_follow_up_on, b.status);
+
+      const rankA = getFollowUpRank(priorityA);
+      const rankB = getFollowUpRank(priorityB);
+
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    });
 
   return (
     <main className="min-h-screen bg-zinc-50">
@@ -419,7 +549,7 @@ export default async function AdminContactosPage({
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-4">
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-zinc-500">Total</p>
             <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
@@ -447,7 +577,49 @@ export default async function AdminContactosPage({
               {doneCount}
             </p>
           </div>
+
+          <div className="rounded-3xl border border-red-200 bg-red-50 p-5 shadow-sm">
+            <p className="text-sm font-medium text-red-700">
+              Seguimiento vencido
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-red-950">
+              {overdueCount}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+            <p className="text-sm font-medium text-amber-700">
+              Seguimiento hoy
+            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-amber-950">
+              {todayCount}
+            </p>
+          </div>
         </div>
+
+        {overdueCount > 0 || todayCount > 0 ? (
+          <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-zinc-900">
+              Prioridad de seguimiento
+            </p>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">
+              {overdueCount > 0
+                ? `${overdueCount} ${
+                    overdueCount === 1 ? "solicitud tiene" : "solicitudes tienen"
+                  } seguimiento vencido`
+                : "No hay seguimientos vencidos"}
+              {overdueCount > 0 && todayCount > 0 ? " y " : ". "}
+              {todayCount > 0
+                ? `${todayCount} ${
+                    todayCount === 1 ? "solicitud toca" : "solicitudes tocan"
+                  } hoy`
+                : overdueCount > 0
+                ? ""
+                : "No hay seguimientos para hoy."}
+              {todayCount > 0 ? "." : ""}
+            </p>
+          </div>
+        ) : null}
 
         <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <form className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -536,271 +708,339 @@ export default async function AdminContactosPage({
               No hay solicitudes para este filtro o búsqueda
             </p>
             <p className="mt-3 text-sm leading-6 text-zinc-600">
-              Cambia el filtro, limpia la búsqueda o espera a que lleguen nuevas solicitudes.
+              Cambia el filtro, limpia la búsqueda o espera a que lleguen nuevas
+              solicitudes.
             </p>
           </div>
         ) : null}
 
         {!error && filteredRequests.length > 0 ? (
           <div className="mt-8 space-y-5">
-            {filteredRequests.map((item) => (
-              <article
-                key={item.id}
-                className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-sm"
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h2 className="text-xl font-semibold text-zinc-900">
-                        {item.name}
-                      </h2>
-                      <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getStatusClasses(
-                          item.status
-                        )}`}
-                      >
-                        {normalizeStatusLabel(item.status)}
-                      </span>
+            {filteredRequests.map((item) => {
+              const followUpPriority = getFollowUpPriority(
+                item.next_follow_up_on,
+                item.status
+              );
+
+              return (
+                <article
+                  key={item.id}
+                  className={getContactCardClasses(followUpPriority)}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h2 className="text-xl font-semibold text-zinc-900">
+                          {item.name}
+                        </h2>
+
+                        <span
+                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getStatusClasses(
+                            item.status
+                          )}`}
+                        >
+                          {normalizeStatusLabel(item.status)}
+                        </span>
+
+                        {followUpPriority === "overdue" ||
+                        followUpPriority === "today" ? (
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getFollowUpPriorityClasses(
+                              followUpPriority
+                            )}`}
+                          >
+                            {getFollowUpPriorityLabel(followUpPriority)}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p className="mt-2 text-sm text-zinc-500">
+                        Recibido el {formatDateTime(item.created_at)}
+                      </p>
                     </div>
 
-                    <p className="mt-2 text-sm text-zinc-500">
-                      Recibido el {formatDateTime(item.created_at)}
-                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <a
+                        href={`mailto:${item.email}`}
+                        className="rounded-2xl bg-black px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                      >
+                        Responder por email
+                      </a>
+
+                      <Link
+                        href={`/admin/contactos/${item.id}`}
+                        className="rounded-2xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                      >
+                        Ver detalle
+                      </Link>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
-                    <a
-                      href={`mailto:${item.email}`}
-                      className="rounded-2xl bg-black px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                    >
-                      Responder por email
-                    </a>
+                  {followUpPriority === "overdue" ? (
+                    <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+                      <p className="text-sm font-semibold text-red-800">
+                        Seguimiento vencido
+                      </p>
+                      <p className="mt-1 text-sm text-red-700">
+                        Estaba previsto volver a contactar el{" "}
+                        {formatDateValue(item.next_follow_up_on)}.
+                      </p>
+                    </div>
+                  ) : null}
 
-                    <Link
-                      href={`/admin/contactos/${item.id}`}
-                      className="rounded-2xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                    >
-                      Ver detalle
-                    </Link>
+                  {followUpPriority === "today" ? (
+                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <p className="text-sm font-semibold text-amber-800">
+                        Seguimiento para hoy
+                      </p>
+                      <p className="mt-1 text-sm text-amber-700">
+                        Conviene revisar esta solicitud hoy para no perder el
+                        seguimiento.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Email
+                      </p>
+                      <p className="mt-2 break-all text-sm text-zinc-900">
+                        {item.email}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Salón
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-900">
+                        {item.business_name || "No indicado"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Teléfono
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-900">
+                        {item.phone || "No indicado"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Equipo
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-900">
+                        {item.employees_range || "No indicado"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Último contacto
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-900">
+                        {formatDateTime(item.last_contact_at)}
+                      </p>
+                    </div>
+
+                    <div className={getFollowUpBoxClasses(followUpPriority)}>
+                      <p
+                        className={`text-xs font-medium uppercase tracking-wide ${
+                          followUpPriority === "overdue"
+                            ? "text-red-700"
+                            : followUpPriority === "today"
+                            ? "text-amber-700"
+                            : "text-zinc-500"
+                        }`}
+                      >
+                        Próximo seguimiento
+                      </p>
+                      <p
+                        className={`mt-2 text-sm ${
+                          followUpPriority === "overdue"
+                            ? "font-semibold text-red-900"
+                            : followUpPriority === "today"
+                            ? "font-semibold text-amber-900"
+                            : "text-zinc-900"
+                        }`}
+                      >
+                        {formatDateValue(item.next_follow_up_on)}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
                     <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Email
+                      Mensaje
                     </p>
-                    <p className="mt-2 break-all text-sm text-zinc-900">
-                      {item.email}
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-700">
+                      {item.message}
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <div
+                    className={`mt-4 rounded-2xl border p-4 ${getFollowUpPanelClasses(
+                      followUpPriority
+                    )}`}
+                  >
                     <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Salón
+                      Estado y seguimiento
                     </p>
-                    <p className="mt-2 text-sm text-zinc-900">
-                      {item.business_name || "No indicado"}
-                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <form action={updateContactRequestStatus}>
+                        <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="status" value="new" />
+                        <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="q" value={searchQuery} />
+                        <button
+                          type="submit"
+                          className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
+                            {
+                              currentStatus: item.status,
+                              targetStatus: "new",
+                            }
+                          )}`}
+                        >
+                          Marcar como nueva
+                        </button>
+                      </form>
+
+                      <form action={updateContactRequestStatus}>
+                        <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="status" value="pending" />
+                        <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="q" value={searchQuery} />
+                        <button
+                          type="submit"
+                          className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
+                            {
+                              currentStatus: item.status,
+                              targetStatus: "pending",
+                            }
+                          )}`}
+                        >
+                          Marcar como pendiente
+                        </button>
+                      </form>
+
+                      <form action={updateContactRequestStatus}>
+                        <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="status" value="done" />
+                        <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="q" value={searchQuery} />
+                        <button
+                          type="submit"
+                          className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
+                            {
+                              currentStatus: item.status,
+                              targetStatus: "done",
+                            }
+                          )}`}
+                        >
+                          Marcar como atendida
+                        </button>
+                      </form>
+
+                      <form action={markLastContactNow}>
+                        <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="filter" value={activeFilter} />
+                        <input type="hidden" name="q" value={searchQuery} />
+                        <button
+                          type="submit"
+                          className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                        >
+                          Marcar contacto ahora
+                        </button>
+                      </form>
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Teléfono
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-900">
-                      {item.phone || "No indicado"}
-                    </p>
-                  </div>
+                  <div
+                    className={`mt-4 rounded-2xl border p-4 ${getFollowUpPanelClasses(
+                      followUpPriority
+                    )}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Próximo seguimiento
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        Fecha prevista para volver a contactar
+                      </p>
+                    </div>
 
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Equipo
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-900">
-                      {item.employees_range || "No indicado"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Último contacto
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-900">
-                      {formatDateTime(item.last_contact_at)}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Próximo seguimiento
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-900">
-                      {formatDateValue(item.next_follow_up_on)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                    Mensaje
-                  </p>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-700">
-                    {item.message}
-                  </p>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                    Estado y seguimiento
-                  </p>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <form action={updateContactRequestStatus}>
+                    <form action={saveNextFollowUp} className="mt-3">
                       <input type="hidden" name="id" value={item.id} />
-                      <input type="hidden" name="status" value="new" />
                       <input type="hidden" name="filter" value={activeFilter} />
                       <input type="hidden" name="q" value={searchQuery} />
-                      <button
-                        type="submit"
-                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
-                          {
-                            currentStatus: item.status,
-                            targetStatus: "new",
-                          }
-                        )}`}
-                      >
-                        Marcar como nueva
-                      </button>
-                    </form>
 
-                    <form action={updateContactRequestStatus}>
-                      <input type="hidden" name="id" value={item.id} />
-                      <input type="hidden" name="status" value="pending" />
-                      <input type="hidden" name="filter" value={activeFilter} />
-                      <input type="hidden" name="q" value={searchQuery} />
-                      <button
-                        type="submit"
-                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
-                          {
-                            currentStatus: item.status,
-                            targetStatus: "pending",
-                          }
-                        )}`}
-                      >
-                        Marcar como pendiente
-                      </button>
-                    </form>
+                      <div className="flex flex-col gap-3 md:flex-row">
+                        <input
+                          type="date"
+                          name="next_follow_up_on"
+                          defaultValue={item.next_follow_up_on ?? ""}
+                          className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                        />
 
-                    <form action={updateContactRequestStatus}>
-                      <input type="hidden" name="id" value={item.id} />
-                      <input type="hidden" name="status" value="done" />
-                      <input type="hidden" name="filter" value={activeFilter} />
-                      <input type="hidden" name="q" value={searchQuery} />
-                      <button
-                        type="submit"
-                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${getActionButtonClasses(
-                          {
-                            currentStatus: item.status,
-                            targetStatus: "done",
-                          }
-                        )}`}
-                      >
-                        Marcar como atendida
-                      </button>
-                    </form>
-
-                    <form action={markLastContactNow}>
-                      <input type="hidden" name="id" value={item.id} />
-                      <input type="hidden" name="filter" value={activeFilter} />
-                      <input type="hidden" name="q" value={searchQuery} />
-                      <button
-                        type="submit"
-                        className="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                      >
-                        Marcar contacto ahora
-                      </button>
+                        <button
+                          type="submit"
+                          className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                        >
+                          Guardar seguimiento
+                        </button>
+                      </div>
                     </form>
                   </div>
-                </div>
 
-                <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Próximo seguimiento
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      Fecha prevista para volver a contactar
-                    </p>
-                  </div>
+                  <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        Notas internas
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        Solo visibles para administración
+                      </p>
+                    </div>
 
-                  <form action={saveNextFollowUp} className="mt-3">
-                    <input type="hidden" name="id" value={item.id} />
-                    <input type="hidden" name="filter" value={activeFilter} />
-                    <input type="hidden" name="q" value={searchQuery} />
+                    <form action={saveInternalNotes} className="mt-3">
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="filter" value={activeFilter} />
+                      <input type="hidden" name="q" value={searchQuery} />
 
-                    <div className="flex flex-col gap-3 md:flex-row">
-                      <input
-                        type="date"
-                        name="next_follow_up_on"
-                        defaultValue={item.next_follow_up_on ?? ""}
+                      <textarea
+                        name="internal_notes"
+                        defaultValue={item.internal_notes ?? ""}
+                        rows={4}
                         className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                        placeholder="Ejemplo: quiere demo, le interesa reserva online, volver a contactar el viernes..."
                       />
 
-                      <button
-                        type="submit"
-                        className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                      >
-                        Guardar seguimiento
-                      </button>
-                    </div>
-                  </form>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                      Notas internas
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      Solo visibles para administración
-                    </p>
+                      <div className="mt-3">
+                        <button
+                          type="submit"
+                          className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                        >
+                          Guardar notas
+                        </button>
+                      </div>
+                    </form>
                   </div>
 
-                  <form action={saveInternalNotes} className="mt-3">
-                    <input type="hidden" name="id" value={item.id} />
-                    <input type="hidden" name="filter" value={activeFilter} />
-                    <input type="hidden" name="q" value={searchQuery} />
-
-                    <textarea
-                      name="internal_notes"
-                      defaultValue={item.internal_notes ?? ""}
-                      rows={4}
-                      className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
-                      placeholder="Ejemplo: quiere demo, le interesa reserva online, volver a contactar el viernes..."
-                    />
-
-                    <div className="mt-3">
-                      <button
-                        type="submit"
-                        className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-                      >
-                        Guardar notas
-                      </button>
-                    </div>
-                  </form>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
-                  <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
-                    Fuente: {item.source || "web"}
-                  </span>
-                  <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
-                    ID: {item.id}
-                  </span>
-                </div>
-              </article>
-            ))}
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
+                    <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
+                      Fuente: {item.source || "web"}
+                    </span>
+                    <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1">
+                      ID: {item.id}
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         ) : null}
       </div>
