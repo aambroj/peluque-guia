@@ -143,7 +143,9 @@ function normalizeFilterStatus(value: string | null | undefined) {
   return "all";
 }
 
-function normalizeFilterPriority(value: string | null | undefined): FollowUpFilter {
+function normalizeFilterPriority(
+  value: string | null | undefined
+): FollowUpFilter {
   const normalized = (value ?? "").trim().toLowerCase();
 
   if (normalized === "overdue") return "overdue";
@@ -226,6 +228,11 @@ function getTodayDateInMadrid() {
 function hasFollowUpDate(value: string | null | undefined) {
   const rawDate = (value ?? "").trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+}
+
+function getFollowUpSortDate(value: string | null | undefined) {
+  if (!hasFollowUpDate(value)) return null;
+  return String(value).trim();
 }
 
 function getFollowUpPriority(
@@ -354,7 +361,9 @@ export default async function AdminContactosPage({
     const rawId = String(formData.get("id") ?? "");
     const rawStatus = String(formData.get("status") ?? "").trim().toLowerCase();
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
-    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "")
+      .trim()
+      .toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
 
     const id = Number(rawId);
@@ -400,7 +409,9 @@ export default async function AdminContactosPage({
 
     const rawId = String(formData.get("id") ?? "");
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
-    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "")
+      .trim()
+      .toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
     const rawNotes = String(formData.get("internal_notes") ?? "");
 
@@ -446,7 +457,9 @@ export default async function AdminContactosPage({
 
     const rawId = String(formData.get("id") ?? "");
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
-    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "")
+      .trim()
+      .toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
 
     const id = Number(rawId);
@@ -491,7 +504,9 @@ export default async function AdminContactosPage({
 
     const rawId = String(formData.get("id") ?? "");
     const rawFilter = String(formData.get("filter") ?? "").trim().toLowerCase();
-    const rawPriority = String(formData.get("priority") ?? "").trim().toLowerCase();
+    const rawPriority = String(formData.get("priority") ?? "")
+      .trim()
+      .toLowerCase();
     const rawQuery = String(formData.get("q") ?? "");
     const rawDate = String(formData.get("next_follow_up_on") ?? "").trim();
 
@@ -510,6 +525,7 @@ export default async function AdminContactosPage({
       .eq("id", id);
 
     revalidatePath("/admin/contactos");
+    revalidatePath("/dashboard");
     redirect(
       buildContactosUrl({
         filter: rawFilter,
@@ -590,9 +606,17 @@ export default async function AdminContactosPage({
         return rankA - rankB;
       }
 
-      return (
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      const followUpDateA = getFollowUpSortDate(a.next_follow_up_on);
+      const followUpDateB = getFollowUpSortDate(b.next_follow_up_on);
+
+      if (followUpDateA && followUpDateB && followUpDateA !== followUpDateB) {
+        return followUpDateA.localeCompare(followUpDateB);
+      }
+
+      if (followUpDateA && !followUpDateB) return -1;
+      if (!followUpDateA && followUpDateB) return 1;
+
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
   return (
@@ -870,8 +894,8 @@ export default async function AdminContactosPage({
               No hay solicitudes para este filtro o búsqueda
             </p>
             <p className="mt-3 text-sm leading-6 text-zinc-600">
-              Cambia los filtros, limpia la búsqueda o espera a que lleguen nuevas
-              solicitudes.
+              Cambia los filtros, limpia la búsqueda o espera a que lleguen
+              nuevas solicitudes.
             </p>
           </div>
         ) : null}
@@ -904,8 +928,7 @@ export default async function AdminContactosPage({
                           {normalizeStatusLabel(item.status)}
                         </span>
 
-                        {followUpPriority === "overdue" ||
-                        followUpPriority === "today" ? (
+                        {hasFollowUpDate(item.next_follow_up_on) ? (
                           <span
                             className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getFollowUpPriorityClasses(
                               followUpPriority
@@ -1057,7 +1080,11 @@ export default async function AdminContactosPage({
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="status" value="new" />
                         <input type="hidden" name="filter" value={activeFilter} />
-                        <input type="hidden" name="priority" value={activePriority} />
+                        <input
+                          type="hidden"
+                          name="priority"
+                          value={activePriority}
+                        />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1076,7 +1103,11 @@ export default async function AdminContactosPage({
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="status" value="pending" />
                         <input type="hidden" name="filter" value={activeFilter} />
-                        <input type="hidden" name="priority" value={activePriority} />
+                        <input
+                          type="hidden"
+                          name="priority"
+                          value={activePriority}
+                        />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1095,7 +1126,11 @@ export default async function AdminContactosPage({
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="status" value="done" />
                         <input type="hidden" name="filter" value={activeFilter} />
-                        <input type="hidden" name="priority" value={activePriority} />
+                        <input
+                          type="hidden"
+                          name="priority"
+                          value={activePriority}
+                        />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1113,7 +1148,11 @@ export default async function AdminContactosPage({
                       <form action={markLastContactNow}>
                         <input type="hidden" name="id" value={item.id} />
                         <input type="hidden" name="filter" value={activeFilter} />
-                        <input type="hidden" name="priority" value={activePriority} />
+                        <input
+                          type="hidden"
+                          name="priority"
+                          value={activePriority}
+                        />
                         <input type="hidden" name="q" value={searchQuery} />
                         <button
                           type="submit"
@@ -1142,7 +1181,11 @@ export default async function AdminContactosPage({
                     <form action={saveNextFollowUp} className="mt-3">
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="filter" value={activeFilter} />
-                      <input type="hidden" name="priority" value={activePriority} />
+                      <input
+                        type="hidden"
+                        name="priority"
+                        value={activePriority}
+                      />
                       <input type="hidden" name="q" value={searchQuery} />
 
                       <div className="flex flex-col gap-3 md:flex-row">
@@ -1176,7 +1219,11 @@ export default async function AdminContactosPage({
                     <form action={saveInternalNotes} className="mt-3">
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="filter" value={activeFilter} />
-                      <input type="hidden" name="priority" value={activePriority} />
+                      <input
+                        type="hidden"
+                        name="priority"
+                        value={activePriority}
+                      />
                       <input type="hidden" name="q" value={searchQuery} />
 
                       <textarea

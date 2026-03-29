@@ -137,13 +137,17 @@ function getTodayDateInMadrid() {
   return `${year}-${month}-${day}`;
 }
 
+function hasFollowUpDate(value: string | null | undefined) {
+  return /^\d{4}-\d{2}-\d{2}$/.test((value ?? "").trim());
+}
+
 function getFollowUpPriority(
   value: string | null | undefined,
   status: string | null | undefined
 ): FollowUpPriority {
   const rawDate = (value ?? "").trim();
 
-  if (!rawDate || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+  if (!hasFollowUpDate(rawDate)) {
     return "none";
   }
 
@@ -216,6 +220,22 @@ function getFollowUpBoxClasses(priority: FollowUpPriority) {
   }
 
   return "rounded-2xl border border-zinc-200 bg-zinc-50 p-4";
+}
+
+function getFollowUpBannerClasses(priority: FollowUpPriority) {
+  if (priority === "overdue") {
+    return "border-red-200 bg-red-50";
+  }
+
+  if (priority === "today") {
+    return "border-amber-200 bg-amber-50";
+  }
+
+  if (priority === "future") {
+    return "border-zinc-200 bg-zinc-50";
+  }
+
+  return "border-zinc-200 bg-zinc-50";
 }
 
 export default async function AdminContactoDetallePage({
@@ -391,6 +411,7 @@ export default async function AdminContactoDetallePage({
 
     revalidatePath("/admin/contactos");
     revalidatePath(`/admin/contactos/${actionId}`);
+    revalidatePath("/dashboard");
     redirect(`/admin/contactos/${actionId}`);
   }
 
@@ -459,6 +480,51 @@ export default async function AdminContactoDetallePage({
           </div>
         </div>
 
+        {hasFollowUpDate(item.next_follow_up_on) ? (
+          <div
+            className={`mt-8 rounded-3xl border p-5 shadow-sm ${getFollowUpBannerClasses(
+              followUpPriority
+            )}`}
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getFollowUpPriorityClasses(
+                  followUpPriority
+                )}`}
+              >
+                {getFollowUpPriorityLabel(followUpPriority)}
+              </span>
+
+              <p
+                className={`text-sm font-medium ${
+                  followUpPriority === "overdue"
+                    ? "text-red-800"
+                    : followUpPriority === "today"
+                    ? "text-amber-800"
+                    : "text-zinc-700"
+                }`}
+              >
+                Próximo seguimiento: {formatDateValue(item.next_follow_up_on)}
+              </p>
+            </div>
+
+            {followUpPriority === "overdue" ? (
+              <p className="mt-2 text-sm text-red-700">
+                Este lead necesita atención prioritaria porque el seguimiento ya
+                ha vencido.
+              </p>
+            ) : followUpPriority === "today" ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este lead debería revisarse hoy.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-600">
+                Ya tiene una fecha de seguimiento programada.
+              </p>
+            )}
+          </div>
+        ) : null}
+
         <div className={`mt-8 ${getContactCardClasses(followUpPriority)}`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -475,8 +541,7 @@ export default async function AdminContactoDetallePage({
                   {normalizeStatusLabel(item.status)}
                 </span>
 
-                {(followUpPriority === "overdue" ||
-                  followUpPriority === "today") && (
+                {hasFollowUpDate(item.next_follow_up_on) ? (
                   <span
                     className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getFollowUpPriorityClasses(
                       followUpPriority
@@ -484,7 +549,7 @@ export default async function AdminContactoDetallePage({
                   >
                     {getFollowUpPriorityLabel(followUpPriority)}
                   </span>
-                )}
+                ) : null}
               </div>
 
               <p className="mt-2 text-sm text-zinc-500">
@@ -511,7 +576,8 @@ export default async function AdminContactoDetallePage({
                 Seguimiento para hoy
               </p>
               <p className="mt-1 text-sm text-amber-700">
-                Conviene revisar esta solicitud hoy para no perder el seguimiento.
+                Conviene revisar esta solicitud hoy para no perder el
+                seguimiento.
               </p>
             </div>
           ) : null}
