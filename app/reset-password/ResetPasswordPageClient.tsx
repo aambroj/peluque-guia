@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 function getFriendlyErrorMessage(message: string) {
@@ -32,20 +32,42 @@ function getFriendlyErrorMessage(message: string) {
   return message || "No se pudo actualizar la contraseña.";
 }
 
+function maskEmail(value: string) {
+  const email = value.trim().toLowerCase();
+
+  if (!email || !email.includes("@")) {
+    return "tu email";
+  }
+
+  const [localPart, domain] = email.split("@");
+
+  if (!localPart || !domain) {
+    return email;
+  }
+
+  if (localPart.length <= 2) {
+    return `${localPart[0] ?? "*"}***@${domain}`;
+  }
+
+  return `${localPart.slice(0, 2)}***@${domain}`;
+}
+
 export default function ResetPasswordPageClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
-  const initialEmail = useMemo(
-    () => searchParams.get("email")?.trim() ?? "",
+  const email = useMemo(
+    () => searchParams.get("email")?.trim().toLowerCase() ?? "",
     [searchParams]
   );
 
-  const [email, setEmail] = useState(initialEmail);
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const maskedEmail = useMemo(() => maskEmail(email), [email]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,7 +76,14 @@ export default function ResetPasswordPageClient() {
     const cleanEmail = email.trim().toLowerCase();
     const cleanToken = token.trim();
 
-    if (!cleanEmail || !cleanToken || !password || !confirmPassword) {
+    if (!cleanEmail) {
+      setErrorMessage(
+        "Falta el email de recuperación. Vuelve atrás y solicita un nuevo código."
+      );
+      return;
+    }
+
+    if (!cleanToken || !password || !confirmPassword) {
       setErrorMessage("Debes completar todos los campos.");
       return;
     }
@@ -97,6 +126,10 @@ export default function ResetPasswordPageClient() {
     window.location.href = "/login?passwordUpdated=1";
   }
 
+  function handleUseAnotherEmail() {
+    router.push("/recuperar-contrasena");
+  }
+
   return (
     <section className="min-h-screen bg-zinc-50">
       <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-10 lg:px-8">
@@ -111,28 +144,23 @@ export default function ResetPasswordPageClient() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">
-              Introduce tu email, el código recibido por correo y tu nueva
+              Introduce el código que te hemos enviado y escribe tu nueva
               contraseña.
             </p>
           </div>
 
           <div className="px-8 py-8 sm:px-10">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-zinc-700">
-                  Email de acceso
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  autoComplete="email"
-                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
-                  placeholder="tuemail@negocio.com"
-                />
-              </div>
+            <div className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-sm font-medium text-zinc-900">
+                Código enviado a {maskedEmail}
+              </p>
+              <p className="mt-1 text-sm text-zinc-600">
+                Si no es tu correo o quieres probar con otro, vuelve a solicitar
+                la recuperación.
+              </p>
+            </div>
 
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="mb-2 block text-sm font-medium text-zinc-700">
                   Código de recuperación
@@ -202,12 +230,13 @@ export default function ResetPasswordPageClient() {
             </form>
 
             <div className="mt-6 flex flex-wrap gap-4 text-sm">
-              <Link
-                href={`/recuperar-contrasena${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`}
+              <button
+                type="button"
+                onClick={handleUseAnotherEmail}
                 className="font-medium text-black underline underline-offset-2"
               >
-                Pedir un nuevo código
-              </Link>
+                Usar otro email
+              </button>
 
               <Link
                 href="/login"
