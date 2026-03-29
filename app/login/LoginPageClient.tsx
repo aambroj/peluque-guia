@@ -267,6 +267,15 @@ export default function LoginPageClient() {
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
                     placeholder="••••••••"
                   />
+
+                  <div className="mt-3">
+                    <Link
+                      href="/contacto"
+                      className="text-sm font-medium text-zinc-600 underline underline-offset-2 hover:text-black"
+                    >
+                      ¿No recuerdas con qué email entraste?
+                    </Link>
+                  </div>
                 </div>
 
                 {errorMessage ? (
