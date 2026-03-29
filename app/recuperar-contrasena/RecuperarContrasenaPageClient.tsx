@@ -1,40 +1,42 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
-
-const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "http://localhost:3000";
 
 function getFriendlyErrorMessage(message: string) {
   const normalized = message.toLowerCase();
 
   if (normalized.includes("rate limit")) {
-    return "Has hecho demasiados intentos. Espera un poco y vuelve a probar.";
+    return "Has hecho demasiados intentos. Supabase está limitando temporalmente el envío de correos de recuperación.";
   }
 
-  return message || "No se pudo enviar el correo de recuperación.";
+  return message || "No se pudo enviar el código de recuperación.";
 }
 
 export default function RecuperarContrasenaPageClient() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (codeSent || loading) return;
+
     setLoading(true);
     setErrorMessage("");
     setSuccessMessage("");
 
+    const cleanEmail = email.trim().toLowerCase();
+
     const { error } = await supabaseBrowser.auth.resetPasswordForEmail(
-      email.trim(),
-      {
-        redirectTo: `${APP_URL}/reset-password`,
-      }
+      cleanEmail
     );
 
     if (error) {
@@ -44,9 +46,28 @@ export default function RecuperarContrasenaPageClient() {
     }
 
     setSuccessMessage(
-      "Si existe una cuenta con ese email, te hemos enviado un enlace para restablecer la contraseña."
+      "Si existe una cuenta con ese email, te hemos enviado un código de recuperación por correo. Revisa también la carpeta de spam."
     );
+    setCodeSent(true);
     setLoading(false);
+  }
+
+  function handleUseAnotherEmail() {
+    setEmail("");
+    setErrorMessage("");
+    setSuccessMessage("");
+    setCodeSent(false);
+    setLoading(false);
+  }
+
+  function goToResetPassword() {
+    const cleanEmail = email.trim();
+
+    router.push(
+      `/reset-password${
+        cleanEmail ? `?email=${encodeURIComponent(cleanEmail)}` : ""
+      }`
+    );
   }
 
   return (
@@ -63,7 +84,7 @@ export default function RecuperarContrasenaPageClient() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">
-              Introduce tu email y te enviaremos un enlace para crear una nueva
+              Introduce tu email y te enviaremos un código para restablecer tu
               contraseña.
             </p>
           </div>
@@ -79,8 +100,9 @@ export default function RecuperarContrasenaPageClient() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   required
+                  disabled={loading || codeSent}
                   autoComplete="email"
-                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500"
                   placeholder="tuemail@negocio.com"
                 />
               </div>
@@ -99,12 +121,36 @@ export default function RecuperarContrasenaPageClient() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full rounded-2xl bg-black px-5 py-3.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading || codeSent}
+                className="w-full rounded-2xl bg-black px-5 py-3.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-700 disabled:hover:opacity-100"
               >
-                {loading ? "Enviando enlace..." : "Enviar enlace de recuperación"}
+                {loading
+                  ? "Enviando código..."
+                  : codeSent
+                  ? "Código enviado"
+                  : "Enviar código de recuperación"}
               </button>
             </form>
+
+            {codeSent ? (
+              <div className="mt-5 space-y-3">
+                <button
+                  type="button"
+                  onClick={goToResetPassword}
+                  className="w-full rounded-2xl border border-zinc-900 bg-white px-5 py-3.5 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50"
+                >
+                  Ya tengo el código, continuar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleUseAnotherEmail}
+                  className="w-full rounded-2xl border border-zinc-300 bg-white px-5 py-3.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+                >
+                  Usar otro email
+                </button>
+              </div>
+            ) : null}
 
             <div className="mt-6 flex flex-wrap gap-4 text-sm">
               <Link

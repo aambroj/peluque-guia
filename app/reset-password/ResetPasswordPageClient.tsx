@@ -1,14 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 function getFriendlyErrorMessage(message: string) {
   const normalized = message.toLowerCase();
 
+  if (
+    normalized.includes("token has expired") ||
+    normalized.includes("otp_expired") ||
+    normalized.includes("invalid") ||
+    normalized.includes("expired")
+  ) {
+    return "El código no es válido o ha caducado. Solicita uno nuevo.";
+  }
+
   if (normalized.includes("same password")) {
     return "La nueva contraseña debe ser diferente de la anterior.";
+  }
+
+  if (normalized.includes("rate limit")) {
+    return "Has hecho demasiados intentos. Espera un poco antes de volver a probar.";
   }
 
   if (normalized.includes("password")) {
@@ -19,43 +33,31 @@ function getFriendlyErrorMessage(message: string) {
 }
 
 export default function ResetPasswordPageClient() {
+  const searchParams = useSearchParams();
+
+  const initialEmail = useMemo(
+    () => searchParams.get("email")?.trim() ?? "",
+    [searchParams]
+  );
+
+  const [email, setEmail] = useState(initialEmail);
+  const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [ready, setReady] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadSession() {
-      const {
-        data: { session },
-      } = await supabaseBrowser.auth.getSession();
-
-      if (mounted) {
-        setReady(Boolean(session));
-      }
-    }
-
-    loadSession();
-
-    const { data } = supabaseBrowser.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!mounted) return;
-        setReady(Boolean(session));
-      }
-    );
-
-    return () => {
-      mounted = false;
-      data.subscription.unsubscribe();
-    };
-  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage("");
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanToken = token.trim();
+
+    if (!cleanEmail || !cleanToken || !password || !confirmPassword) {
+      setErrorMessage("Debes completar todos los campos.");
+      return;
+    }
 
     if (password.length < 6) {
       setErrorMessage("La contraseña debe tener al menos 6 caracteres.");
@@ -69,73 +71,30 @@ export default function ResetPasswordPageClient() {
 
     setLoading(true);
 
-    const { error } = await supabaseBrowser.auth.updateUser({
+    const { error: verifyError } = await supabaseBrowser.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type: "recovery",
+    });
+
+    if (verifyError) {
+      setErrorMessage(getFriendlyErrorMessage(verifyError.message));
+      setLoading(false);
+      return;
+    }
+
+    const { error: updateError } = await supabaseBrowser.auth.updateUser({
       password,
     });
 
-    if (error) {
-      setErrorMessage(getFriendlyErrorMessage(error.message));
+    if (updateError) {
+      setErrorMessage(getFriendlyErrorMessage(updateError.message));
       setLoading(false);
       return;
     }
 
     await supabaseBrowser.auth.signOut();
     window.location.href = "/login?passwordUpdated=1";
-  }
-
-  if (ready === null) {
-    return (
-      <section className="min-h-screen bg-zinc-50">
-        <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-10 lg:px-8">
-          <div className="w-full rounded-[2rem] border border-zinc-200 bg-white p-10 shadow-sm">
-            <p className="text-sm text-zinc-600">Comprobando enlace…</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  if (!ready) {
-    return (
-      <section className="min-h-screen bg-zinc-50">
-        <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-10 lg:px-8">
-          <div className="w-full overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
-            <div className="border-b border-zinc-200 bg-gradient-to-r from-white via-zinc-50 to-white px-8 py-8 sm:px-10">
-              <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
-                Acceso y seguridad
-              </div>
-
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
-                Enlace no válido
-              </h1>
-
-              <p className="mt-3 text-sm leading-6 text-zinc-600">
-                Este enlace de recuperación ha caducado o ya no es válido.
-                Solicita uno nuevo para continuar.
-              </p>
-            </div>
-
-            <div className="px-8 py-8 sm:px-10">
-              <div className="flex flex-wrap gap-4 text-sm">
-                <Link
-                  href="/recuperar-contrasena"
-                  className="font-medium text-black underline underline-offset-2"
-                >
-                  Pedir un nuevo enlace
-                </Link>
-
-                <Link
-                  href="/login"
-                  className="font-medium text-zinc-600 underline underline-offset-2"
-                >
-                  Volver a entrar
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
   }
 
   return (
@@ -152,13 +111,48 @@ export default function ResetPasswordPageClient() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">
-              Elige una nueva contraseña para volver a acceder a tu cuenta de
-              Peluque-Guía.
+              Introduce tu email, el código recibido por correo y tu nueva
+              contraseña.
             </p>
           </div>
 
           <div className="px-8 py-8 sm:px-10">
             <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-zinc-700">
+                  Email de acceso
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  autoComplete="email"
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none transition focus:border-black"
+                  placeholder="tuemail@negocio.com"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-zinc-700">
+                  Código de recuperación
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={token}
+                  onChange={(event) =>
+                    setToken(event.target.value.replace(/\s+/g, ""))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm tracking-[0.2em] outline-none transition focus:border-black"
+                  placeholder="123456"
+                />
+                <p className="mt-2 text-xs text-zinc-500">
+                  Introduce el código que te ha llegado por email.
+                </p>
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-zinc-700">
                   Nueva contraseña
@@ -207,7 +201,14 @@ export default function ResetPasswordPageClient() {
               </button>
             </form>
 
-            <div className="mt-6 text-sm">
+            <div className="mt-6 flex flex-wrap gap-4 text-sm">
+              <Link
+                href={`/recuperar-contrasena${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`}
+                className="font-medium text-black underline underline-offset-2"
+              >
+                Pedir un nuevo código
+              </Link>
+
               <Link
                 href="/login"
                 className="font-medium text-zinc-600 underline underline-offset-2"
