@@ -4,7 +4,7 @@ import CopyBookingUrlButton from "@/components/CopyBookingUrlButton";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "https://www.peluqueguia.es";
+  "https://peluqueguia.es";
 
 export default async function PublicBookingHomePage() {
   const { supabase, businessId } = await getServerBusinessContext();

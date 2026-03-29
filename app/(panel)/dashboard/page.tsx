@@ -9,7 +9,7 @@ import { formatDate, formatTime, getStatusBadgeClasses } from "@/lib/utils";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "https://www.peluqueguia.es";
+  "https://peluqueguia.es";
 
 const REVENUE_STATUSES = new Set(["Confirmada", "Completada"]);
 const MADRID_TIME_ZONE = "Europe/Madrid";

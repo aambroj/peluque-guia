@@ -9,7 +9,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "https://www.peluqueguia.es";
+  "https://peluqueguia.es";
 
 function normalizeText(value: string) {
   return value

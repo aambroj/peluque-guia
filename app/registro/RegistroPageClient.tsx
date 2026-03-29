@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-  "https://www.peluqueguia.es";
+  "https://peluqueguia.es";
 
 function slugify(value: string) {
   return value
