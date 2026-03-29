@@ -61,13 +61,13 @@ export default function ResetPasswordPageClient() {
     [searchParams]
   );
 
+  const maskedEmail = useMemo(() => maskEmail(email), [email]);
+
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const maskedEmail = useMemo(() => maskEmail(email), [email]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,6 +85,11 @@ export default function ResetPasswordPageClient() {
 
     if (!cleanToken || !password || !confirmPassword) {
       setErrorMessage("Debes completar todos los campos.");
+      return;
+    }
+
+    if (cleanToken.length !== 6) {
+      setErrorMessage("El código debe tener 6 dígitos.");
       return;
     }
 
@@ -132,14 +137,14 @@ export default function ResetPasswordPageClient() {
 
   return (
     <section className="min-h-screen bg-zinc-50">
-      <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-10 lg:px-8">
-        <div className="w-full overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-sm">
-          <div className="border-b border-zinc-200 bg-gradient-to-r from-white via-zinc-50 to-white px-8 py-8 sm:px-10">
+      <div className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+        <div className="w-full overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-white shadow-sm sm:rounded-[2rem]">
+          <div className="border-b border-zinc-200 bg-gradient-to-r from-white via-zinc-50 to-white px-5 py-6 sm:px-8 sm:py-8 sm:px-10">
             <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
               Acceso y seguridad
             </div>
 
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
+            <h1 className="mt-4 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
               Crear nueva contraseña
             </h1>
 
@@ -149,12 +154,12 @@ export default function ResetPasswordPageClient() {
             </p>
           </div>
 
-          <div className="px-8 py-8 sm:px-10">
+          <div className="px-5 py-6 sm:px-8 sm:py-8 sm:px-10">
             <div className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-sm font-medium text-zinc-900">
                 Código enviado a {maskedEmail}
               </p>
-              <p className="mt-1 text-sm text-zinc-600">
+              <p className="mt-1 text-sm leading-6 text-zinc-600">
                 Si no es tu correo o quieres probar con otro, vuelve a solicitar
                 la recuperación.
               </p>
@@ -168,16 +173,20 @@ export default function ResetPasswordPageClient() {
                 <input
                   type="text"
                   inputMode="numeric"
+                  autoFocus
+                  maxLength={6}
                   value={token}
                   onChange={(event) =>
-                    setToken(event.target.value.replace(/\s+/g, ""))
+                    setToken(
+                      event.target.value.replace(/\D+/g, "").slice(0, 6)
+                    )
                   }
                   required
-                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm tracking-[0.2em] outline-none transition focus:border-black"
+                  className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-center text-lg font-semibold tracking-[0.35em] outline-none transition focus:border-black"
                   placeholder="123456"
                 />
                 <p className="mt-2 text-xs text-zinc-500">
-                  Introduce el código que te ha llegado por email.
+                  Introduce los 6 dígitos del código recibido por email.
                 </p>
               </div>
 
@@ -215,7 +224,7 @@ export default function ResetPasswordPageClient() {
               </div>
 
               {errorMessage ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
                   {errorMessage}
                 </div>
               ) : null}
@@ -229,11 +238,11 @@ export default function ResetPasswordPageClient() {
               </button>
             </form>
 
-            <div className="mt-6 flex flex-wrap gap-4 text-sm">
+            <div className="mt-6 flex flex-col gap-3 text-sm sm:flex-row sm:flex-wrap sm:gap-4">
               <button
                 type="button"
                 onClick={handleUseAnotherEmail}
-                className="font-medium text-black underline underline-offset-2"
+                className="text-left font-medium text-black underline underline-offset-2"
               >
                 Usar otro email
               </button>

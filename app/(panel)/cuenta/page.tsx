@@ -467,6 +467,7 @@ export default async function CuentaPage() {
   const roleLabel = getReadableRole(profile?.role);
   const trialEndLabel = formatDate(subscription?.trial_end);
   const currentPeriodEndLabel = formatDate(subscription?.current_period_end);
+  const accessEmail = user.email ?? null;
 
   return (
     <section className="px-6 py-8">
@@ -515,7 +516,7 @@ export default async function CuentaPage() {
                 {business?.name ?? "Sin nombre"}
               </p>
               <p className="mt-1 text-sm text-zinc-500">
-                {business?.email ?? user.email ?? "Sin email"}
+                {business?.email ?? "Sin email del negocio"}
               </p>
             </div>
 
@@ -555,7 +556,7 @@ export default async function CuentaPage() {
             <div className="rounded-2xl border border-zinc-200 bg-white p-4">
               <p className="text-sm text-zinc-500">Titular / perfil</p>
               <p className="mt-2 text-lg font-semibold text-zinc-900">
-                {profile?.full_name || user.email || "Usuario"}
+                {profile?.full_name || accessEmail || "Usuario"}
               </p>
               <p className="mt-1 text-sm text-zinc-500">Rol: {roleLabel}</p>
             </div>
@@ -818,8 +819,37 @@ export default async function CuentaPage() {
               <div className="rounded-2xl border border-zinc-200 p-4">
                 <p className="text-sm text-zinc-500">Email del negocio</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  {business?.email ?? user.email ?? "Sin email"}
+                  {business?.email ?? "Sin email del negocio"}
                 </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 p-4">
+                <p className="text-sm text-zinc-500">Email de acceso</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">
+                  {accessEmail ?? "Sin email de acceso"}
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Este es el correo con el que entras en Peluque-Guía y con el
+                  que recuperas tu contraseña.
+                </p>
+
+                {accessEmail ? (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <CopyBookingUrlButton
+                      value={accessEmail}
+                      defaultLabel="Copiar email de acceso"
+                      copiedLabel="Email copiado"
+                      className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                    />
+
+                    <Link
+                      href="/recuperar-contrasena"
+                      className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                    >
+                      Cambiar o recuperar contraseña
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -915,7 +945,7 @@ export default async function CuentaPage() {
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
                 <p className="text-sm text-zinc-500">Titular / perfil</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  {profile?.full_name || user.email || "Usuario"}
+                  {profile?.full_name || accessEmail || "Usuario"}
                 </p>
                 <p className="mt-2 text-sm text-zinc-500">Rol: {roleLabel}</p>
               </div>

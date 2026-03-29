@@ -39,15 +39,15 @@ export default function LoginPageClient() {
 
   const successMessage = useMemo(() => {
     if (searchParams.get("passwordUpdated") === "1") {
-      return "Tu contraseña se ha actualizado correctamente. Ya puedes entrar.";
+      return "Tu contraseña se ha actualizado correctamente. Ya puedes acceder a tu cuenta.";
     }
 
     if (searchParams.get("recovery") === "sent") {
-      return "Si existe una cuenta con ese email, te hemos enviado un enlace para restablecer la contraseña.";
+      return "Te hemos enviado las instrucciones de recuperación. Revisa tu correo para continuar.";
     }
 
     if (searchParams.get("registered") === "1") {
-      return "Cuenta creada correctamente. Ya puedes iniciar sesión.";
+      return "Tu cuenta se ha creado correctamente. Ya puedes entrar al panel.";
     }
 
     return "";
@@ -223,7 +223,7 @@ export default function LoginPageClient() {
               </div>
 
               {successMessage ? (
-                <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">
                   {successMessage}
                 </div>
               ) : null}
