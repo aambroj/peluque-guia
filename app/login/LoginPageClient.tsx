@@ -31,10 +31,27 @@ function getFriendlyErrorMessage(message: string) {
 
 export default function LoginPageClient() {
   const searchParams = useSearchParams();
+
   const redirectTo = useMemo(
     () => getSafeRedirect(searchParams.get("redirectTo")),
     [searchParams]
   );
+
+  const successMessage = useMemo(() => {
+    if (searchParams.get("passwordUpdated") === "1") {
+      return "Tu contraseña se ha actualizado correctamente. Ya puedes entrar.";
+    }
+
+    if (searchParams.get("recovery") === "sent") {
+      return "Si existe una cuenta con ese email, te hemos enviado un enlace para restablecer la contraseña.";
+    }
+
+    if (searchParams.get("registered") === "1") {
+      return "Cuenta creada correctamente. Ya puedes iniciar sesión.";
+    }
+
+    return "";
+  }, [searchParams]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,7 +64,7 @@ export default function LoginPageClient() {
     setErrorMessage("");
 
     const { error } = await supabaseBrowser.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
@@ -205,6 +222,12 @@ export default function LoginPageClient() {
                 </p>
               </div>
 
+              {successMessage ? (
+                <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                  {successMessage}
+                </div>
+              ) : null}
+
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-zinc-700">
@@ -222,9 +245,19 @@ export default function LoginPageClient() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-zinc-700">
-                    Contraseña
-                  </label>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium text-zinc-700">
+                      Contraseña
+                    </label>
+
+                    <Link
+                      href="/recuperar-contrasena"
+                      className="text-sm font-medium text-black underline underline-offset-2"
+                    >
+                      ¿Has olvidado tu contraseña?
+                    </Link>
+                  </div>
+
                   <input
                     type="password"
                     value={password}

@@ -8,7 +8,6 @@ const PROTECTED_ROUTES = [
   "/servicios",
   "/reservas",
   "/cuenta",
-  "/admin",
 ];
 
 const ALLOWED_INACTIVE_BUSINESS_ROUTES = [
@@ -16,15 +15,6 @@ const ALLOWED_INACTIVE_BUSINESS_ROUTES = [
   "/cuenta/planes",
   "/cuenta/facturacion",
 ];
-
-const CONTACT_ADMIN_EMAILS = (
-  process.env.CONTACT_ADMIN_EMAILS?.split(",") ?? [
-    "alber.ambroj@gmail.com",
-    "aambroj@yahoo.es",
-  ]
-)
-  .map((value) => value.trim().toLowerCase())
-  .filter(Boolean);
 
 function normalizeText(value: string) {
   return value
@@ -34,18 +24,10 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function matchesRoute(pathname: string, routes: string[]) {
-  return routes.some(
+function isProtectedRoute(pathname: string) {
+  return PROTECTED_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
-}
-
-function isProtectedRoute(pathname: string) {
-  return matchesRoute(pathname, PROTECTED_ROUTES);
-}
-
-function isAdminRoute(pathname: string) {
-  return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
 function isAllowedInactiveBusinessRoute(pathname: string) {
@@ -53,7 +35,9 @@ function isAllowedInactiveBusinessRoute(pathname: string) {
     return true;
   }
 
-  return matchesRoute(pathname, ALLOWED_INACTIVE_BUSINESS_ROUTES);
+  return ALLOWED_INACTIVE_BUSINESS_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
 }
 
 function isPendingActivationSubscription(
@@ -103,10 +87,6 @@ export async function proxy(request: NextRequest) {
     request,
   });
 
-  const { pathname, search } = request.nextUrl;
-  const protectedRoute = isProtectedRoute(pathname);
-  const authPage = pathname === "/login" || pathname === "/registro";
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -136,89 +116,48 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    if (protectedRoute) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("redirectTo", `${pathname}${search}`);
-      return NextResponse.redirect(url);
-    }
+  const { pathname, search } = request.nextUrl;
 
-    return response;
+  if (isProtectedRoute(pathname) && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("redirectTo", `${pathname}${search}`);
+    return NextResponse.redirect(url);
   }
 
-  const userEmail = user.email?.trim().toLowerCase() ?? "";
-  const isContactAdmin = CONTACT_ADMIN_EMAILS.includes(userEmail);
-
-  if (!protectedRoute && !authPage) {
+  if (!user) {
     return response;
   }
 
   const accessState = await getBusinessAccessState(supabase, user.id);
 
   if (pathname === "/login") {
-    if (isContactAdmin && !accessState.hasBusiness) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/contactos";
-      url.searchParams.delete("redirectTo");
-      return NextResponse.redirect(url);
-    }
-
-    if (!accessState.hasBusiness) {
-      return response;
-    }
-
     const url = request.nextUrl.clone();
+
     url.pathname = accessState.isPendingActivation ? "/cuenta" : "/dashboard";
     url.searchParams.delete("redirectTo");
+
     return NextResponse.redirect(url);
   }
 
   if (pathname === "/registro") {
-    if (isContactAdmin && !accessState.hasBusiness) {
+    if (accessState.hasBusiness) {
       const url = request.nextUrl.clone();
-      url.pathname = "/admin/contactos";
+
+      url.pathname = accessState.isPendingActivation ? "/cuenta" : "/dashboard";
       url.searchParams.delete("redirectTo");
+
       return NextResponse.redirect(url);
     }
 
-    if (!accessState.hasBusiness) {
-      return response;
-    }
-
-    const url = request.nextUrl.clone();
-    url.pathname = accessState.isPendingActivation ? "/cuenta" : "/dashboard";
-    url.searchParams.delete("redirectTo");
-    return NextResponse.redirect(url);
-  }
-
-  if (protectedRoute && !accessState.hasBusiness) {
-    if (isContactAdmin) {
-      if (isAdminRoute(pathname)) {
-        return response;
-      }
-
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/contactos";
-      url.searchParams.delete("redirectTo");
-      return NextResponse.redirect(url);
-    }
-
-    const url = request.nextUrl.clone();
-    url.pathname = "/registro";
-    url.searchParams.delete("redirectTo");
-    return NextResponse.redirect(url);
+    return response;
   }
 
   if (
     accessState.isPendingActivation &&
-    protectedRoute &&
+    isProtectedRoute(pathname) &&
     !isAllowedInactiveBusinessRoute(pathname)
   ) {
-    if (isContactAdmin && isAdminRoute(pathname)) {
-      return response;
-    }
-
     const url = request.nextUrl.clone();
     url.pathname = "/cuenta";
     url.searchParams.delete("redirectTo");
@@ -230,14 +169,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/dashboard/:path*",
-    "/clientes/:path*",
-    "/empleados/:path*",
-    "/servicios/:path*",
-    "/reservas/:path*",
-    "/cuenta/:path*",
-    "/admin/:path*",
-    "/login",
-    "/registro",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
