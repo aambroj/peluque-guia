@@ -3,7 +3,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Política de cookies",
   description:
-    "Información sobre el uso de cookies en Peluque-Guía.",
+    "Información sobre el uso de cookies en PeluqueGuía.",
 };
 
 export default function CookiesPage() {
