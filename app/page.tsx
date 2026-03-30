@@ -277,7 +277,7 @@ export default function HomePage() {
             </div>
 
             <h1 className="mt-6 max-w-4xl text-4xl font-bold leading-tight tracking-tight text-zinc-900 sm:text-5xl lg:text-6xl">
-              Software para Peluquerías. Gestiona reservas, reservas online, clientes,
+              Software para Peluquerías. Gestiona las reservas, reservas online, clientes,
               empleados y servicios desde un solo panel
             </h1>
 
