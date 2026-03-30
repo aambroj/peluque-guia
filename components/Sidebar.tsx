@@ -210,8 +210,8 @@ export default function Sidebar() {
   const adminContactosActive = isActive(pathname, "/admin/contactos");
 
   return (
-    <aside className="relative z-50 border-r border-zinc-200 bg-white">
-      <div className="sticky top-0 z-50 flex min-h-screen flex-col">
+    <aside className="h-full min-h-screen border-r border-zinc-200 bg-white md:h-screen">
+      <div className="flex h-full min-h-screen flex-col md:h-screen">
         <div className="border-b border-zinc-200 px-6 py-6">
           <Link href={homeHref} className="block">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">

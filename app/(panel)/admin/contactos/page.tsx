@@ -748,8 +748,8 @@ export default async function AdminContactosPage({
     });
 
   return (
-    <main className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-zinc-50">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-6 py-8 lg:px-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-medium text-zinc-500">
@@ -1524,6 +1524,6 @@ export default async function AdminContactosPage({
           </div>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }
