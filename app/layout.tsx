@@ -1,17 +1,26 @@
-import Sidebar from "@/components/Sidebar";
+import type { Metadata } from "next";
+import "./globals.css";
 
-export default function PanelLayout({
+export const metadata: Metadata = {
+  title: {
+    default: "PeluqueGuía",
+    template: "%s | PeluqueGuía",
+  },
+  description:
+    "Software web para peluquerías: reservas, clientes, empleados, servicios y gestión del negocio en un solo panel.",
+  applicationName: "PeluqueGuía",
+};
+
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[260px_1fr]">
-      <Sidebar />
-
-      <div className="flex min-h-screen flex-col">
-        <main className="flex-1">{children}</main>
-      </div>
-    </div>
+    <html lang="es">
+      <body className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
+        {children}
+      </body>
+    </html>
   );
 }
