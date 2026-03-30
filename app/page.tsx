@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Software para peluquerías | PeluqueGuía",
+  description:
+    "Software para peluquerías: reservas online, clientes, empleados, servicios y gestión del negocio en un solo panel.",
+};
 
 const features = [
   {
@@ -266,18 +273,19 @@ export default function HomePage() {
         <div className="mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:px-8 lg:py-24">
           <div className="relative">
             <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
-              Gestión profesional para peluquerías
+              Software para peluquerías
             </div>
 
             <h1 className="mt-6 max-w-4xl text-4xl font-bold leading-tight tracking-tight text-zinc-900 sm:text-5xl lg:text-6xl">
-              Organiza tu salón con una herramienta clara, moderna y preparada
-              para crecer contigo.
+              Software para peluquerías para gestionar reservas, clientes,
+              empleados y servicios desde un solo panel
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-              PeluqueGuía te ayuda a gestionar reservas, clientes, equipo,
-              servicios y reserva online desde un solo panel. Menos
-              improvisación, mejor imagen y una operativa mucho más ordenada.
+              PeluqueGuía es un software web para peluquerías que te ayuda a
+              organizar reservas, clientes, equipo, servicios y reserva online
+              desde un solo panel. Menos improvisación, mejor imagen y una
+              operativa mucho más ordenada.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
