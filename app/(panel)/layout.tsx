@@ -8,11 +8,13 @@ export default function PanelLayout({
 }>) {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[260px_1fr]">
-      <Sidebar />
+      <aside className="relative z-50">
+        <Sidebar />
+      </aside>
 
-      <div className="flex min-h-screen flex-col">
+      <div className="relative z-0 flex min-h-screen min-w-0 flex-col">
         <AppHeader />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 min-w-0">{children}</main>
       </div>
     </div>
   );

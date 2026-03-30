@@ -133,13 +133,10 @@ export default function Sidebar() {
 
         if (adminMatch) {
           try {
-            const response = await fetch(
-              "/api/admin-contact-requests-summary",
-              {
-                method: "GET",
-                cache: "no-store",
-              }
-            );
+            const response = await fetch("/api/admin-contact-requests-summary", {
+              method: "GET",
+              cache: "no-store",
+            });
 
             const result =
               (await response.json()) as AdminContactRequestsSummary;
@@ -213,8 +210,8 @@ export default function Sidebar() {
   const adminContactosActive = isActive(pathname, "/admin/contactos");
 
   return (
-    <aside className="border-r border-zinc-200 bg-white">
-      <div className="sticky top-0 flex h-full min-h-screen flex-col">
+    <aside className="relative z-50 border-r border-zinc-200 bg-white">
+      <div className="sticky top-0 z-50 flex min-h-screen flex-col">
         <div className="border-b border-zinc-200 px-6 py-6">
           <Link href={homeHref} className="block">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">

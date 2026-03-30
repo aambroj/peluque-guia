@@ -1,26 +1,21 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import Sidebar from "@/components/Sidebar";
+import AppHeader from "@/components/AppHeader";
 
-export const metadata: Metadata = {
-  title: {
-    default: "PeluqueGuía",
-    template: "%s | PeluqueGuía",
-  },
-  description:
-    "Software web para peluquerías: reservas, clientes, empleados, servicios y gestión del negocio en un solo panel.",
-  applicationName: "PeluqueGuía",
-};
-
-export default function RootLayout({
+export default function PanelLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
-      <body className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
-        {children}
-      </body>
-    </html>
+    <div className="min-h-screen md:grid md:grid-cols-[260px_1fr]">
+      <div className="relative z-50">
+        <Sidebar />
+      </div>
+
+      <div className="relative z-0 flex min-h-screen min-w-0 flex-col">
+        <AppHeader />
+        <main className="flex-1 min-w-0">{children}</main>
+      </div>
+    </div>
   );
 }
