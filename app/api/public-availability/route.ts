@@ -220,7 +220,7 @@ function buildDayAvailability(params: {
       summary: {
         color: "red" as DayColor,
         title: "No trabaja",
-        detail: "Ese empleado no trabaja este día.",
+        detail: "Ese empleado no trabaja este día",
         slots: 0,
       },
       availableSlots: [] as string[],
@@ -350,7 +350,7 @@ function buildDayAvailability(params: {
       summary: {
         color: "green" as DayColor,
         title: "Libre",
-        detail: "Día completamente libre.",
+        detail: "Día disponible",
         slots: availableSlots.length,
       },
       availableSlots,
@@ -361,7 +361,7 @@ function buildDayAvailability(params: {
     summary: {
       color: "orange" as DayColor,
       title: "Libre",
-      detail: "Quedan huecos disponibles.",
+      detail: "Quedan huecos disponibles",
       slots: availableSlots.length,
     },
     availableSlots,
