@@ -1123,82 +1123,92 @@ export default function PublicEmployeeBookingPage() {
                 ) : null}
               </div>
 
-              <div className="mt-4 grid grid-cols-7 gap-2">
-                {WEEKDAY_LABELS.map((label) => (
-                  <div
-                    key={label}
-                    className="rounded-xl bg-zinc-100 px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-600"
-                  >
-                    {label}
-                  </div>
-                ))}
+              <div className="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500 md:hidden">
+                Desliza lateralmente para ver el calendario completo.
+              </div>
 
-                {calendarCells.map((cell) => {
-                  if (cell.type === "empty") {
-                    return (
+              <div className="mt-3 overflow-x-auto pb-2">
+                <div className="min-w-[680px]">
+                  <div className="grid grid-cols-7 gap-2 md:gap-3">
+                    {WEEKDAY_LABELS.map((label) => (
                       <div
-                        key={cell.key}
-                        className="min-h-[92px] rounded-2xl border border-transparent"
-                      />
-                    );
-                  }
+                        key={label}
+                        className="rounded-xl bg-zinc-100 px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-zinc-600 sm:text-xs"
+                      >
+                        {label}
+                      </div>
+                    ))}
 
-                  return (
-                    <button
-                      key={cell.key}
-                      type="button"
-                      disabled={cell.isPast}
-                      onClick={() => {
-                        if (cell.isPast) return;
-                        setSelectedDate(cell.date);
-                        setSelectedTime("");
-                        setBookingSuccess(null);
-                        setFormError("");
-                      }}
-                      className={`min-h-[96px] rounded-2xl border p-3 text-left transition ${
-                        cell.isPast
-                          ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400"
-                          : cell.info
-                          ? getSoftColorClasses(cell.info.color)
-                          : "border-zinc-200 bg-white text-zinc-500"
-                      }`}
-                      style={
-                        cell.isSelected && !cell.isPast
-                          ? { boxShadow: `0 0 0 2px ${accentColor}` }
-                          : undefined
+                    {calendarCells.map((cell) => {
+                      if (cell.type === "empty") {
+                        return (
+                          <div
+                            key={cell.key}
+                            className="min-h-[92px] rounded-2xl border border-transparent sm:min-h-[100px]"
+                          />
+                        );
                       }
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-semibold">
-                          {cell.dayNumber}
-                        </span>
 
-                        {!cell.isPast && cell.info ? (
-                          <span className="rounded-full bg-white/80 px-2 py-1 text-[11px] font-medium">
-                            {cell.info.slots}
-                          </span>
-                        ) : null}
-                      </div>
+                      return (
+                        <button
+                          key={cell.key}
+                          type="button"
+                          disabled={cell.isPast}
+                          onClick={() => {
+                            if (cell.isPast) return;
+                            setSelectedDate(cell.date);
+                            setSelectedTime("");
+                            setBookingSuccess(null);
+                            setFormError("");
+                          }}
+                          className={`min-h-[100px] rounded-2xl border p-3 text-left transition sm:min-h-[112px] ${
+                            cell.isPast
+                              ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400"
+                              : cell.info
+                              ? getSoftColorClasses(cell.info.color)
+                              : "border-zinc-200 bg-white text-zinc-500"
+                          }`}
+                          style={
+                            cell.isSelected && !cell.isPast
+                              ? { boxShadow: `0 0 0 2px ${accentColor}` }
+                              : undefined
+                          }
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-sm font-semibold sm:text-base">
+                              {cell.dayNumber}
+                            </span>
 
-                      <div className="mt-2">
-                        {cell.isPast ? (
-                          <p className="text-xs">Pasado</p>
-                        ) : cell.info ? (
-                          <>
-                            <p className="-ml-0.5 break-words pr-1 text-[13px] font-semibold leading-tight tracking-tight">
-                              {cell.info.title}
-                            </p>
-                            <p className="mt-1 line-clamp-2 text-[11px]">
-                              {cell.info.detail}
-                            </p>
-                          </>
-                        ) : (
-                          <p className="text-xs">Sin datos</p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                            {!cell.isPast && cell.info ? (
+                              <span className="shrink-0 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold leading-none sm:text-[11px]">
+                                {cell.info.slots}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-2">
+                            {cell.isPast ? (
+                              <p className="text-[11px] sm:text-xs">Pasado</p>
+                            ) : cell.info ? (
+                              <>
+                                <p className="pr-1 text-xs font-semibold leading-tight tracking-tight break-normal sm:text-[13px]">
+                                  {cell.info.title}
+                                </p>
+                                <p className="mt-1 hidden text-[11px] leading-4 md:line-clamp-2 md:block">
+                                  {cell.info.detail}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-[11px] sm:text-xs">
+                                Sin datos
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
