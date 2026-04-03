@@ -89,7 +89,7 @@ const plans = [
       "Servicios y precios",
       "Reserva pública online",
     ],
-    tone: "zinc",
+    tone: "bronze",
   },
   {
     name: "Pro",
@@ -104,7 +104,7 @@ const plans = [
       "Métricas avanzadas",
       "Más visión operativa",
     ],
-    tone: "sky",
+    tone: "silver",
   },
   {
     name: "Premium",
@@ -121,7 +121,7 @@ const plans = [
     ],
     extra:
       "Desde el empleado 11 se añade un suplemento mensual por empleado activo extra.",
-    tone: "violet",
+    tone: "gold",
   },
 ];
 
@@ -180,35 +180,44 @@ const testimonials = [
 ];
 
 function getPlanClasses(tone: string) {
-  if (tone === "sky") {
+  if (tone === "silver") {
     return {
-      card: "border-[#d9c9d8] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(245,236,242,0.96))]",
-      badge: "border-[#d9c9d8] bg-white/90 text-[#7b5367]",
-      title: "text-[#4b3340]",
-      text: "text-[#6b5561]",
+      card: "border-[#c8ccd4] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(239,241,245,0.98))]",
+      badge: "border-[#c9cdd4] bg-white/90 text-[#626b77]",
+      title: "text-[#2f3640]",
+      text: "text-[#58616d]",
       button:
-        "bg-gradient-to-r from-[#7c3f58] to-[#9b5c74] text-white shadow-lg shadow-[#7c3f58]/15 hover:opacity-95",
+        "bg-gradient-to-r from-[#66707d] to-[#7a8592] text-white shadow-lg shadow-[#66707d]/15 hover:opacity-95",
+      extraCard: "border-slate-200 bg-slate-50",
+      extraTitle: "text-slate-800",
+      extraText: "text-slate-700",
     };
   }
 
-  if (tone === "violet") {
+  if (tone === "gold") {
     return {
-      card: "border-[#d3c4db] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(241,235,246,0.98))]",
-      badge: "border-[#d3c4db] bg-white/90 text-[#6c4d73]",
-      title: "text-[#412847]",
-      text: "text-[#66556c]",
+      card: "border-[#dcc16b] bg-[linear-gradient(180deg,rgba(255,252,241,0.98),rgba(250,240,198,0.92))]",
+      badge: "border-[#dcc16b] bg-white/75 text-[#8a6400]",
+      title: "text-[#4e3a0d]",
+      text: "text-[#6d5a2b]",
       button:
-        "bg-gradient-to-r from-[#6d3a6f] to-[#8d537f] text-white shadow-lg shadow-[#6d3a6f]/15 hover:opacity-95",
+        "bg-gradient-to-r from-[#8b6a16] to-[#b18b2c] text-white shadow-lg shadow-[#8b6a16]/15 hover:opacity-95",
+      extraCard: "border-[#e3c96f] bg-[linear-gradient(180deg,rgba(255,249,226,0.95),rgba(247,233,177,0.92))]",
+      extraTitle: "text-[#7a5700]",
+      extraText: "text-[#8b650a]",
     };
   }
 
   return {
-    card: "border-[#e8d9d8] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(251,243,240,0.98))]",
-    badge: "border-[#ead9d8] bg-white/90 text-[#7c5c5d]",
-    title: "text-[#3b2a31]",
-    text: "text-[#6a5b61]",
+    card: "border-[#cda77f] bg-[linear-gradient(180deg,rgba(255,250,246,0.98),rgba(243,226,211,0.96))]",
+    badge: "border-[#cda77f] bg-white/80 text-[#8c5e36]",
+    title: "text-[#4a2e1d]",
+    text: "text-[#6d5446]",
     button:
-      "bg-gradient-to-r from-[#7c3f58] to-[#9b5c74] text-white shadow-lg shadow-[#7c3f58]/15 hover:opacity-95",
+      "bg-gradient-to-r from-[#9a6a43] to-[#b07a50] text-white shadow-lg shadow-[#9a6a43]/15 hover:opacity-95",
+    extraCard: "border-amber-200 bg-amber-50",
+    extraTitle: "text-amber-900",
+    extraText: "text-amber-800",
   };
 }
 
@@ -571,7 +580,7 @@ export default function HomePage() {
               return (
                 <div
                   key={plan.name}
-                  className={`rounded-3xl border p-6 shadow-[0_18px_50px_rgba(87,45,65,0.07)] ${styles.card}`}
+                  className={`rounded-3xl border p-6 shadow-[0_22px_60px_rgba(87,45,65,0.10)] ${styles.card}`}
                 >
                   <div
                     className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${styles.badge}`}
@@ -589,7 +598,7 @@ export default function HomePage() {
                     </p>
 
                     {plan.subtitle ? (
-                      <p className="mt-1 text-sm text-emerald-700">
+                      <p className="mt-1 text-sm font-medium text-emerald-700">
                         {plan.subtitle}
                       </p>
                     ) : null}
@@ -613,11 +622,11 @@ export default function HomePage() {
                   </ul>
 
                   {plan.extra ? (
-                    <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                      <p className="text-sm font-medium text-amber-900">
+                    <div className={`mt-5 rounded-2xl border p-4 ${styles.extraCard}`}>
+                      <p className={`text-sm font-medium ${styles.extraTitle}`}>
                         Escalado del plan
                       </p>
-                      <p className="mt-2 text-sm leading-6 text-amber-800">
+                      <p className={`mt-2 text-sm leading-6 ${styles.extraText}`}>
                         {plan.extra}
                       </p>
                     </div>
@@ -641,35 +650,35 @@ export default function HomePage() {
               Resumen rápido
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-4">
-              <div className="rounded-2xl border border-[#eadada] bg-[linear-gradient(180deg,#fffefe_0%,#faf2ef_100%)] p-4">
-                <p className="text-sm font-medium text-[#7a6870]">Basic</p>
-                <p className="mt-2 text-lg font-semibold text-[#2f2430]">
+              <div className="rounded-2xl border border-[#cda77f] bg-[linear-gradient(180deg,#fffaf6_0%,#f3e2d3_100%)] p-4">
+                <p className="text-sm font-medium text-[#8c5e36]">Basic</p>
+                <p className="mt-2 text-lg font-semibold text-[#4a2e1d]">
                   Hasta 2 empleados
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-[#d9c9d8] bg-[linear-gradient(180deg,#fffefe_0%,#f7eff4_100%)] p-4">
-                <p className="text-sm font-medium text-[#7b5367]">Pro</p>
-                <p className="mt-2 text-lg font-semibold text-[#4b3340]">
+              <div className="rounded-2xl border border-[#c8ccd4] bg-[linear-gradient(180deg,#ffffff_0%,#eef1f5_100%)] p-4">
+                <p className="text-sm font-medium text-[#626b77]">Pro</p>
+                <p className="mt-2 text-lg font-semibold text-[#2f3640]">
                   Hasta 5 empleados
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-[#d3c4db] bg-[linear-gradient(180deg,#fffefe_0%,#f3edf7_100%)] p-4">
-                <p className="text-sm font-medium text-[#6c4d73]">Premium</p>
-                <p className="mt-2 text-lg font-semibold text-[#412847]">
+              <div className="rounded-2xl border border-[#dcc16b] bg-[linear-gradient(180deg,#fffdf2_0%,#f7ebb7_100%)] p-4">
+                <p className="text-sm font-medium text-[#8a6400]">Premium</p>
+                <p className="mt-2 text-lg font-semibold text-[#4e3a0d]">
                   Hasta 10 empleados
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-medium text-amber-700">
+              <div className="rounded-2xl border border-[#e3c96f] bg-[linear-gradient(180deg,#fff9e1_0%,#f5e7af_100%)] p-4">
+                <p className="text-sm font-medium text-[#8a6400]">
                   Equipo adicional
                 </p>
-                <p className="mt-2 text-lg font-semibold text-amber-950">
+                <p className="mt-2 text-lg font-semibold text-[#5b4208]">
                   Desde el empleado 11
                 </p>
-                <p className="mt-2 text-sm text-amber-800">
+                <p className="mt-2 text-sm text-[#8b650a]">
                   Suplemento mensual por empleado activo extra.
                 </p>
               </div>
