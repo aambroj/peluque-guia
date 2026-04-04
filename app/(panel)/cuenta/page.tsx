@@ -272,6 +272,16 @@ function hasPremiumCustomizationAccess(
   );
 }
 
+function canDeletePendingAccount(
+  plan: string | null | undefined,
+  status: string | null | undefined
+) {
+  const normalizedPlan = normalizeText(plan ?? "");
+  const normalizedStatus = normalizeText(status ?? "");
+
+  return normalizedPlan === "basic" && normalizedStatus === "inactive";
+}
+
 function sanitizeHexColor(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   const valid = /^#[0-9a-fA-F]{6}$/.test(raw);
@@ -386,6 +396,74 @@ export default async function CuentaPage() {
     }
   }
 
+  async function deletePendingAccount(formData: FormData) {
+    "use server";
+
+    const confirmation = String(formData.get("delete_confirmation") ?? "")
+      .trim()
+      .toUpperCase();
+
+    if (confirmation !== "ELIMINAR") {
+      redirect("/cuenta");
+    }
+
+    const { user, businessId, supabase } = await getServerBusinessContext();
+
+    if (!user) {
+      redirect("/login");
+    }
+
+    if (!businessId) {
+      redirect("/");
+    }
+
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("plan, status")
+      .eq("business_id", businessId)
+      .maybeSingle();
+
+    if (!canDeletePendingAccount(subscription?.plan, subscription?.status)) {
+      redirect("/cuenta");
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
+    const deleteResults = await Promise.all([
+      supabaseAdmin.from("reservas").delete().eq("business_id", businessId),
+      supabaseAdmin
+        .from("employee_schedules")
+        .delete()
+        .eq("business_id", businessId),
+      supabaseAdmin
+        .from("employee_time_off")
+        .delete()
+        .eq("business_id", businessId),
+      supabaseAdmin.from("clientes").delete().eq("business_id", businessId),
+      supabaseAdmin.from("servicios").delete().eq("business_id", businessId),
+      supabaseAdmin.from("empleados").delete().eq("business_id", businessId),
+      supabaseAdmin.from("subscriptions").delete().eq("business_id", businessId),
+      supabaseAdmin.from("profiles").delete().eq("business_id", businessId),
+      supabaseAdmin.from("businesses").delete().eq("id", businessId),
+    ]);
+
+    const firstDeleteError = deleteResults.find((result) => result.error)?.error;
+
+    if (firstDeleteError) {
+      throw new Error(firstDeleteError.message);
+    }
+
+    const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(
+      user.id
+    );
+
+    if (deleteUserError) {
+      throw new Error(deleteUserError.message);
+    }
+
+    redirect("/?deleted_account=1");
+  }
+
   const [
     { data: business, error: businessError },
     { data: subscription, error: subscriptionError },
@@ -460,6 +538,11 @@ export default async function CuentaPage() {
     subscription?.status
   );
 
+  const pendingDeletionAllowed = canDeletePendingAccount(
+    subscription?.plan,
+    subscription?.status
+  );
+
   const brandPrimaryColor = sanitizeHexColor(business?.brand_primary_color);
   const publicBookingMessage = business?.public_booking_message ?? "";
   const publicLogoUrl = sanitizeLogoUrl(business?.public_logo_url);
@@ -478,7 +561,7 @@ export default async function CuentaPage() {
       <div className="mx-auto max-w-6xl space-y-8">
         <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
           <div className="border-b border-zinc-200 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 p-8">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl">
                 <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
                   Cuenta del negocio
@@ -495,7 +578,7 @@ export default async function CuentaPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex w-full max-w-sm flex-col items-start gap-3 lg:items-end">
                 <Link
                   href="/dashboard"
                   className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
@@ -509,6 +592,50 @@ export default async function CuentaPage() {
                 >
                   {primaryAction.label}
                 </Link>
+
+                {pendingDeletionAllowed ? (
+                  <details className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                    <summary className="cursor-pointer list-none text-sm font-semibold text-rose-700">
+                      Eliminar cuenta
+                    </summary>
+
+                    <div className="mt-3 space-y-3">
+                      <p className="text-sm leading-6 text-rose-700">
+                        Esta acción borrará tu cuenta de acceso y este negocio
+                        pendiente de activar. Es útil si te has registrado para
+                        probar y quieres empezar de cero.
+                      </p>
+
+                      <form action={deletePendingAccount} className="space-y-3">
+                        <div>
+                          <label
+                            htmlFor="delete_confirmation"
+                            className="mb-2 block text-sm font-medium text-rose-800"
+                          >
+                            Escribe <span className="font-bold">ELIMINAR</span>{" "}
+                            para confirmar
+                          </label>
+                          <input
+                            id="delete_confirmation"
+                            name="delete_confirmation"
+                            type="text"
+                            required
+                            pattern="ELIMINAR"
+                            className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none focus:border-rose-400"
+                            placeholder="ELIMINAR"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="rounded-xl border border-rose-300 bg-white px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100"
+                        >
+                          Eliminar cuenta definitivamente
+                        </button>
+                      </form>
+                    </div>
+                  </details>
+                ) : null}
               </div>
             </div>
           </div>
