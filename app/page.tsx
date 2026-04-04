@@ -294,14 +294,15 @@ export default function HomePage() {
             </div>
 
             <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight text-[#2f2430] sm:text-5xl lg:text-6xl">
-              Software para peluquerías y centros de estética. Gestiona tu salón desde un solo panel.
+              Software para peluquerías y centros de estética. Gestiona tu salón
+              desde un solo panel.
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-[#6d5b64] sm:text-lg">
-              PeluqueGuía es un software web para peluquerías y centros de estética que te ayuda a
-              organizar reservas, clientes, equipo, servicios y reserva online
-              desde un solo panel. Menos improvisación, mejor imagen y una
-              operativa mucho más ordenada.
+              PeluqueGuía es un software web para peluquerías y centros de
+              estética que te ayuda a organizar reservas, clientes, equipo,
+              servicios y reserva online desde un solo panel. Menos
+              improvisación, mejor imagen y una operativa mucho más ordenada.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -350,7 +351,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="relative lg:-mt-10 xl:-mt-12">
+          <div className="relative lg:-mt-24 xl:-mt-28">
             <div className="rounded-[2rem] border border-white/70 bg-white/70 p-6 shadow-[0_24px_80px_rgba(87,45,65,0.12)] backdrop-blur sm:p-8">
               <div className="rounded-3xl border border-[#eadada] bg-[linear-gradient(180deg,rgba(255,255,255,0.8),rgba(250,242,244,0.95))] p-5">
                 <div className="flex items-center justify-between gap-4">
