@@ -667,46 +667,6 @@ export default function HomePage() {
               );
             })}
           </div>
-
-          <div className="mt-8 rounded-3xl border border-[#eadada] bg-white/85 p-6 shadow-[0_18px_50px_rgba(87,45,65,0.06)]">
-            <p className="text-sm font-medium text-[#7a6870]">
-              Resumen rápido
-            </p>
-            <div className="mt-4 grid gap-4 md:grid-cols-4">
-              <div className="rounded-2xl border border-[#cda77f] bg-[linear-gradient(180deg,#fffaf6_0%,#f3e2d3_100%)] p-4">
-                <p className="text-sm font-medium text-[#8c5e36]">Basic</p>
-                <p className="mt-2 text-lg font-semibold text-[#4a2e1d]">
-                  Hasta 2 empleados
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-[#c8ccd4] bg-[linear-gradient(180deg,#ffffff_0%,#eef1f5_100%)] p-4">
-                <p className="text-sm font-medium text-[#626b77]">Pro</p>
-                <p className="mt-2 text-lg font-semibold text-[#2f3640]">
-                  Hasta 5 empleados
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-[#dcc16b] bg-[linear-gradient(180deg,#fffdf2_0%,#f7ebb7_100%)] p-4">
-                <p className="text-sm font-medium text-[#8a6400]">Premium</p>
-                <p className="mt-2 text-lg font-semibold text-[#4e3a0d]">
-                  Hasta 10 empleados
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-[#e3c96f] bg-[linear-gradient(180deg,#fff9e1_0%,#f5e7af_100%)] p-4">
-                <p className="text-sm font-medium text-[#8a6400]">
-                  Equipo adicional
-                </p>
-                <p className="mt-2 text-lg font-semibold text-[#5b4208]">
-                  Desde el empleado 11
-                </p>
-                <p className="mt-2 text-sm text-[#8b650a]">
-                  Suplemento mensual por empleado activo extra.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -742,7 +702,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="faq" className="bg-[linear-gradient(180deg,#fff8f5_0%,#fcf4f6_100%)]">
+      <section
+        id="faq"
+        className="bg-[linear-gradient(180deg,#fff8f5_0%,#fcf4f6_100%)]"
+      >
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-[#7a6870]">
