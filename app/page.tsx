@@ -288,7 +288,7 @@ export default function HomePage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(234,214,214,0.75),transparent_32%),radial-gradient(circle_at_top_right,rgba(221,214,243,0.48),transparent_26%),radial-gradient(circle_at_bottom_left,rgba(248,235,232,0.9),transparent_30%)]" />
 
         <div className="mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:px-8 lg:py-24">
-          <div className="relative">
+          <div className="relative lg:-mt-8 xl:-mt-10">
             <div className="inline-flex rounded-full border border-[#e7d7d7] bg-white/80 px-3 py-1 text-xs font-medium text-[#7a6870] backdrop-blur">
               Software para peluquerías
             </div>
