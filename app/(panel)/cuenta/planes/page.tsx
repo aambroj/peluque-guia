@@ -15,10 +15,12 @@ type PlanDefinition = {
   description: string;
   features: string[];
   highlight?: string;
+  highlightBadge?: string;
   cardClassName: string;
   badgeClassName: string;
   titleClassName: string;
   textClassName: string;
+  buttonClassName: string;
 };
 
 type ActionState =
@@ -36,62 +38,69 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     key: "basic",
     badge: "Basic",
-    title: "Empezar",
+    title: "Para empezar",
     priceLabel: "19 €/mes",
     subtitle: "30 días gratis y después 19 €/mes",
-    employeesLabel: "Hasta 2 empleados activos",
+    employeesLabel: "Hasta 2 empleados",
     description:
-      "Pensado para salones pequeños que quieren empezar a trabajar con una gestión clara, moderna y profesional.",
+      "Ideal para peluquerías pequeñas que quieren empezar a trabajar con más orden y una imagen más profesional.",
     features: [
-      "Clientes y agenda",
-      "Servicios y empleados",
+      "Clientes y reservas",
+      "Equipo y horarios",
+      "Servicios y precios",
       "Reserva pública online",
-      "Base sólida para organizar el día a día",
     ],
-    cardClassName: "border-zinc-200 bg-white",
-    badgeClassName: "border-zinc-200 bg-zinc-50 text-zinc-700",
-    titleClassName: "text-zinc-900",
-    textClassName: "text-zinc-700",
+    cardClassName: "border-[#d7ae87] bg-[#f8efe7]",
+    badgeClassName: "border-[#d7ae87] bg-white/80 text-[#a06433]",
+    titleClassName: "text-[#5b3416]",
+    textClassName: "text-[#7b5436]",
+    buttonClassName:
+      "bg-[#b9804e] text-white shadow-[0_10px_24px_rgba(185,128,78,0.28)] hover:bg-[#a87345]",
   },
   {
     key: "pro",
     badge: "Pro",
-    title: "Crecer",
+    title: "Para crecer",
     priceLabel: "39 €/mes",
     employeesLabel: "Hasta 5 empleados activos",
     description:
-      "Preparado para peluquerías con más movimiento, más equipo y necesidad de una gestión más completa.",
+      "Pensado para negocios con más movimiento, más equipo y necesidad de una operativa más completa.",
     features: [
       "Todo lo de Basic",
-      "Más capacidad para equipo",
-      "Métricas y operativa más avanzadas",
-      "Mejor base para crecer con orden",
+      "Más capacidad de equipo",
+      "Métricas avanzadas",
+      "Más visión operativa",
     ],
-    cardClassName: "border-sky-200 bg-sky-50",
-    badgeClassName: "border-sky-200 bg-white text-sky-700",
-    titleClassName: "text-sky-950",
-    textClassName: "text-sky-900",
+    cardClassName: "border-[#c6ced8] bg-[#f2f5f9]",
+    badgeClassName: "border-[#c6ced8] bg-white/80 text-[#64758b]",
+    titleClassName: "text-[#223a57]",
+    textClassName: "text-[#5a6c82]",
+    buttonClassName:
+      "bg-[#6e7b8f] text-white shadow-[0_10px_24px_rgba(110,123,143,0.24)] hover:bg-[#627084]",
   },
   {
     key: "premium",
-    badge: "Premium Plus",
-    title: "Escalar",
+    badge: "Premium",
+    title: "Para escalar",
     priceLabel: "69 €/mes",
     employeesLabel: "Hasta 10 empleados activos",
     description:
-      "La opción más completa para negocios con una operativa más potente, una imagen más cuidada y margen real para escalar.",
+      "La opción más completa para salones con una operativa más potente, mejor imagen y margen real para escalar.",
     features: [
       "Todo lo de Pro",
-      "Personalización Premium Plus",
+      "Personalización Premium",
       "Mayor capacidad operativa",
-      "Preparado para integraciones y crecimiento",
+      "Base preparada para crecer más",
     ],
+    highlightBadge: "PREMIUM PLUS",
     highlight:
       "Desde el empleado 11 se añade un suplemento mensual por empleado activo extra.",
-    cardClassName: "border-violet-200 bg-violet-50",
-    badgeClassName: "border-violet-200 bg-white text-violet-700",
-    titleClassName: "text-violet-950",
-    textClassName: "text-violet-900",
+    cardClassName: "border-[#e1bf57] bg-[#fbf5de]",
+    badgeClassName: "border-[#e1bf57] bg-white/80 text-[#9c7b14]",
+    titleClassName: "text-[#6c4a09]",
+    textClassName: "text-[#7b6532]",
+    buttonClassName:
+      "bg-[#a88718] text-white shadow-[0_10px_24px_rgba(168,135,24,0.26)] hover:bg-[#967713]",
   },
 ];
 
@@ -117,10 +126,9 @@ function formatPlanLabel(plan: string | null | undefined) {
   const planKey = getPlanKey(plan);
 
   if (!planKey) return "Sin plan";
-
   if (planKey === "basic") return "Basic";
   if (planKey === "pro") return "Pro";
-  return "Premium Plus";
+  return "Premium";
 }
 
 function formatStatusLabel(status: string | null | undefined) {
@@ -184,8 +192,8 @@ function getStatusClasses(status: string | null | undefined) {
 
 function getActionLabel(planKey: PlanKey) {
   if (planKey === "basic") return "Empezar con Basic";
-  if (planKey === "pro") return "Pasar a Pro";
-  return "Pasar a Premium Plus";
+  if (planKey === "pro") return "Empezar con Pro";
+  return "Empezar con Premium";
 }
 
 function buildPlanActionState(params: {
@@ -256,60 +264,29 @@ export default async function PlanesPage() {
 
   return (
     <section className="px-6 py-8">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
-          <div className="border-b border-zinc-200 bg-gradient-to-r from-white via-zinc-50 to-white p-8">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600">
-                  Planes SaaS
-                </div>
-
-                <h2 className="mt-4 text-3xl font-bold tracking-tight text-zinc-900">
-                  Elige el plan que encaja con tu equipo
-                </h2>
-
-                <p className="mt-3 text-zinc-600">
-                  Compara planes, capacidad incluida y evolución del precio para
-                  que tu peluquería pueda crecer con una estructura clara.
-                </p>
-              </div>
-
-              <Link
-                href="/cuenta"
-                className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-              >
-                Volver a cuenta
-              </Link>
-            </div>
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-900">
+              Elige el plan que mejor encaja con tu salón
+            </h2>
+            <p className="mt-3 text-zinc-600">
+              Mantén una estructura clara desde el inicio y escala cuando tu
+              equipo y tu operativa lo necesiten.
+            </p>
           </div>
 
-          <div className="grid gap-4 p-6 md:grid-cols-3">
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <p className="text-sm text-zinc-500">Plan actual</p>
-              <p className="mt-2 text-lg font-semibold text-zinc-900">
-                {currentPlan}
-              </p>
-            </div>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/cuenta"
+              className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+            >
+              Volver a cuenta
+            </Link>
 
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <p className="text-sm text-zinc-500">Estado</p>
-              <div className="mt-2">
-                <span
-                  className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getStatusClasses(
-                    subscription?.status
-                  )}`}
-                >
-                  {currentStatus}
-                </span>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <p className="text-sm text-zinc-500">Gestión del plan</p>
-              <p className="mt-2 text-lg font-semibold text-zinc-900">
-                {hasManagedSubscription ? "Desde facturación" : "Desde checkout"}
-              </p>
+            <div className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-600">
+              <span className="font-medium text-zinc-800">Plan actual:</span>{" "}
+              {currentPlan} · {currentStatus}
             </div>
           </div>
         </div>
@@ -320,9 +297,9 @@ export default async function PlanesPage() {
               Tu suscripción ya se gestiona desde facturación
             </h3>
             <p className="mt-2 text-sm leading-7 text-sky-800">
-              Como tu negocio ya tiene una suscripción gestionable, los cambios
-              de plan, facturas, método de pago y cancelación deben hacerse
-              desde la pantalla de facturación.
+              Como tu negocio ya tiene una suscripción activa, los cambios de
+              plan, método de pago, facturas y cancelación se hacen desde la
+              pantalla de facturación.
             </p>
 
             <div className="mt-4">
@@ -336,48 +313,6 @@ export default async function PlanesPage() {
           </div>
         ) : null}
 
-        <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold text-zinc-900">
-            Cómo crecerá el precio según tu equipo
-          </h3>
-          <div className="mt-5 grid gap-4 md:grid-cols-4">
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-sm font-medium text-zinc-500">Basic</p>
-              <p className="mt-2 text-lg font-semibold text-zinc-900">
-                Hasta 2 empleados
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-              <p className="text-sm font-medium text-sky-700">Pro</p>
-              <p className="mt-2 text-lg font-semibold text-sky-950">
-                Hasta 5 empleados
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
-              <p className="text-sm font-medium text-violet-700">
-                Premium Plus
-              </p>
-              <p className="mt-2 text-lg font-semibold text-violet-950">
-                Hasta 10 empleados
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-medium text-amber-700">
-                Equipo adicional
-              </p>
-              <p className="mt-2 text-lg font-semibold text-amber-950">
-                Desde el 11
-              </p>
-              <p className="mt-2 text-sm text-amber-800">
-                Suplemento mensual por cada empleado activo extra.
-              </p>
-            </div>
-          </div>
-        </div>
-
         <div className="grid gap-6 lg:grid-cols-3">
           {PLAN_DEFINITIONS.map((plan) => {
             const actionState = buildPlanActionState({
@@ -389,7 +324,7 @@ export default async function PlanesPage() {
             return (
               <div
                 key={plan.key}
-                className={`rounded-3xl border p-6 shadow-sm ${plan.cardClassName}`}
+                className={`rounded-[2rem] border p-6 shadow-sm ${plan.cardClassName}`}
               >
                 <div
                   className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${plan.badgeClassName}`}
@@ -397,45 +332,48 @@ export default async function PlanesPage() {
                   {plan.badge}
                 </div>
 
-                <h3 className={`mt-4 text-2xl font-bold ${plan.titleClassName}`}>
+                <h3 className={`mt-6 text-[2.1rem] font-bold leading-none ${plan.titleClassName}`}>
                   {plan.title}
                 </h3>
 
-                <div className="mt-4">
-                  <p className={`text-3xl font-bold ${plan.titleClassName}`}>
+                <div className="mt-6">
+                  <p className={`text-4xl font-bold tracking-tight ${plan.titleClassName}`}>
                     {plan.priceLabel}
                   </p>
 
                   {plan.subtitle ? (
-                    <p className="mt-1 text-sm text-emerald-700">
+                    <p className="mt-2 text-sm text-emerald-700">
                       {plan.subtitle}
                     </p>
                   ) : null}
 
-                  <p className="mt-2 text-sm font-medium text-zinc-600">
+                  <p className={`mt-3 text-sm font-medium ${plan.textClassName}`}>
                     {plan.employeesLabel}
                   </p>
                 </div>
 
-                <p className={`mt-4 text-sm leading-7 ${plan.textClassName}`}>
+                <p className={`mt-6 text-sm leading-9 ${plan.textClassName}`}>
                   {plan.description}
                 </p>
 
-                <ul className={`mt-5 space-y-2 text-sm ${plan.textClassName}`}>
+                <ul className={`mt-6 space-y-3 text-sm ${plan.textClassName}`}>
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex gap-2">
-                      <span>•</span>
+                    <li key={feature} className="flex gap-3">
+                      <span className="mt-[2px]">•</span>
                       <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
 
                 {plan.highlight ? (
-                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-sm font-medium text-amber-900">
-                      Escalado del plan
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-amber-800">
+                  <div className="mt-6 rounded-[1.6rem] border border-[#d8b54a] bg-[#f3e3a7] p-5">
+                    {plan.highlightBadge ? (
+                      <div className="inline-flex rounded-full bg-[#9a7820] px-4 py-2 text-[11px] font-bold tracking-[0.22em] text-white">
+                        {plan.highlightBadge}
+                      </div>
+                    ) : null}
+
+                    <p className="mt-5 text-sm leading-8 text-[#6f5920]">
                       {plan.highlight}
                     </p>
                   </div>
@@ -443,20 +381,20 @@ export default async function PlanesPage() {
 
                 <div className="mt-6">
                   {actionState.kind === "current" ? (
-                    <div className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-5 py-3 text-center text-sm font-medium text-zinc-600">
+                    <div className="w-full rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-center text-sm font-medium text-zinc-600">
                       {actionState.label}
                     </div>
                   ) : actionState.kind === "portal" ? (
                     <Link
                       href={actionState.href}
-                      className="block w-full rounded-xl border border-zinc-300 bg-white px-5 py-3 text-center text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+                      className="block w-full rounded-2xl border border-zinc-300 bg-white px-5 py-4 text-center text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
                     >
                       {actionState.label}
                     </Link>
                   ) : (
                     <StripeCheckoutButton
                       plan={plan.key}
-                      className="w-full rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                      className={`w-full rounded-2xl px-5 py-4 text-sm font-medium transition disabled:opacity-50 ${plan.buttonClassName}`}
                     >
                       {actionState.label}
                     </StripeCheckoutButton>
@@ -465,52 +403,6 @@ export default async function PlanesPage() {
               </div>
             );
           })}
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-            <h3 className="text-xl font-semibold text-emerald-900">
-              Método de cobro pensado para crecer
-            </h3>
-            <p className="mt-2 text-sm leading-7 text-emerald-800">
-              La idea es mantener un precio base claro por plan y, en Premium
-              Plus, ampliar capacidad cuando el salón supere los 10 empleados
-              activos.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold text-zinc-900">
-              Métodos de pago
-            </h3>
-            <p className="mt-2 text-sm leading-7 text-zinc-600">
-              El objetivo es aceptar tarjeta y wallets modernas desde Stripe
-              Checkout, y después ampliar con métodos adicionales según
-              disponibilidad.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {["Tarjeta", "Apple Pay", "Google Pay", "PayPal"].map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-          <h3 className="text-xl font-semibold text-amber-900">
-            Siguiente fase
-          </h3>
-          <p className="mt-2 text-sm leading-7 text-amber-800">
-            Lo siguiente será terminar de validar en real el flujo de cobro y,
-            después, habilitar más métodos de pago y ajustes finos del portal de
-            facturación.
-          </p>
         </div>
       </div>
     </section>

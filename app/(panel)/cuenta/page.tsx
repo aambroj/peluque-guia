@@ -25,7 +25,7 @@ function formatPlanLabel(plan: string | null | undefined) {
   if (!normalized) return "Sin plan";
   if (normalized === "basic") return "Basic";
   if (normalized === "pro") return "Pro";
-  if (normalized === "premium") return "Premium Plus";
+  if (normalized === "premium") return "Premium";
 
   return plan ?? "Sin plan";
 }
@@ -108,11 +108,15 @@ function getPlanCardClasses(plan: string | null | undefined) {
   const normalized = normalizeText(plan ?? "");
 
   if (normalized === "premium") {
-    return "border-violet-200 bg-violet-50";
+    return "border-[#e1bf57] bg-[#fbf5de]";
   }
 
   if (normalized === "pro") {
-    return "border-sky-200 bg-sky-50";
+    return "border-[#c6ced8] bg-[#f2f5f9]";
+  }
+
+  if (normalized === "basic") {
+    return "border-[#d7ae87] bg-[#f8efe7]";
   }
 
   return "border-zinc-200 bg-white";
@@ -1040,16 +1044,16 @@ export default async function CuentaPage() {
         </div>
 
         {premiumCustomizationEnabled ? (
-          <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
+          <div className="rounded-3xl border border-[#e1bf57] bg-[#fbf5de] p-6 shadow-sm">
             <div className="mb-5">
-              <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700">
-                Premium Plus
+              <div className="inline-flex rounded-full border border-[#e1bf57] bg-white px-3 py-1 text-xs font-medium text-[#9c7b14]">
+                Premium
               </div>
 
-              <h3 className="mt-4 text-xl font-semibold text-violet-900">
-                Personalización Premium Plus
+              <h3 className="mt-4 text-xl font-semibold text-[#6c4a09]">
+                Personalización Premium
               </h3>
-              <p className="mt-1 text-sm text-violet-800">
+              <p className="mt-1 text-sm text-[#7b6532]">
                 Ajusta la imagen básica de tu reserva pública para que encaje
                 mejor con tu marca.
               </p>
@@ -1060,7 +1064,7 @@ export default async function CuentaPage() {
                 <div>
                   <label
                     htmlFor="brand_primary_color"
-                    className="mb-2 block text-sm font-medium text-violet-900"
+                    className="mb-2 block text-sm font-medium text-[#6c4a09]"
                   >
                     Color principal
                   </label>
@@ -1069,9 +1073,9 @@ export default async function CuentaPage() {
                     name="brand_primary_color"
                     type="color"
                     defaultValue={brandPrimaryColor}
-                    className="h-14 w-full rounded-xl border border-violet-200 bg-white p-2"
+                    className="h-14 w-full rounded-xl border border-[#e1bf57] bg-white p-2"
                   />
-                  <p className="mt-2 text-xs text-violet-800">
+                  <p className="mt-2 text-xs text-[#7b6532]">
                     Se usará como color de acento en la reserva pública.
                   </p>
                 </div>
@@ -1079,7 +1083,7 @@ export default async function CuentaPage() {
                 <div>
                   <label
                     htmlFor="public_logo_url"
-                    className="mb-2 block text-sm font-medium text-violet-900"
+                    className="mb-2 block text-sm font-medium text-[#6c4a09]"
                   >
                     Logo público (URL)
                   </label>
@@ -1088,10 +1092,10 @@ export default async function CuentaPage() {
                     name="public_logo_url"
                     type="url"
                     defaultValue={publicLogoUrl}
-                    className="w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500"
+                    className="w-full rounded-xl border border-[#e1bf57] bg-white px-4 py-3 text-sm outline-none focus:border-[#a88718]"
                     placeholder="https://tu-dominio.com/logo.png"
                   />
-                  <p className="mt-2 text-xs text-violet-800">
+                  <p className="mt-2 text-xs text-[#7b6532]">
                     Usa una URL pública completa de imagen.
                   </p>
                 </div>
@@ -1100,7 +1104,7 @@ export default async function CuentaPage() {
               <div>
                 <label
                   htmlFor="public_booking_message"
-                  className="mb-2 block text-sm font-medium text-violet-900"
+                  className="mb-2 block text-sm font-medium text-[#6c4a09]"
                 >
                   Mensaje público de reserva
                 </label>
@@ -1110,18 +1114,16 @@ export default async function CuentaPage() {
                   defaultValue={publicBookingMessage}
                   rows={5}
                   maxLength={500}
-                  className="w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500"
+                  className="w-full rounded-xl border border-[#e1bf57] bg-white px-4 py-3 text-sm outline-none focus:border-[#a88718]"
                   placeholder="Ej. Reserva tu cita online y te confirmaremos cualquier detalle si fuera necesario."
                 />
-                <p className="mt-2 text-xs text-violet-800">
+                <p className="mt-2 text-xs text-[#7b6532]">
                   Este texto puede mostrarse en la página pública de reserva.
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-violet-200 bg-white p-4">
-                <p className="text-sm font-medium text-zinc-900">
-                  Vista rápida
-                </p>
+              <div className="rounded-2xl border border-[#e1bf57] bg-white p-4">
+                <p className="text-sm font-medium text-zinc-900">Vista rápida</p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span
@@ -1159,9 +1161,9 @@ export default async function CuentaPage() {
               <div className="flex flex-wrap gap-3">
                 <button
                   type="submit"
-                  className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                  className="rounded-xl bg-[#a88718] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#967713]"
                 >
-                  Guardar personalización Premium Plus
+                  Guardar personalización Premium
                 </button>
 
                 {publicBookingUrl ? (
@@ -1194,26 +1196,26 @@ export default async function CuentaPage() {
             </form>
           </div>
         ) : (
-          <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
-            <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700">
-              Premium Plus
+          <div className="rounded-3xl border border-[#e1bf57] bg-[#fbf5de] p-6 shadow-sm">
+            <div className="inline-flex rounded-full border border-[#e1bf57] bg-white px-3 py-1 text-xs font-medium text-[#9c7b14]">
+              Premium
             </div>
 
-            <h3 className="mt-4 text-xl font-semibold text-violet-900">
-              Personalización Premium Plus
+            <h3 className="mt-4 text-xl font-semibold text-[#6c4a09]">
+              Personalización Premium
             </h3>
-            <p className="mt-2 text-sm text-violet-800">
-              En Premium Plus podrás personalizar la reserva pública con color
-              de marca, mensaje del negocio y logo público para ofrecer una
-              imagen más cuidada y profesional.
+            <p className="mt-2 text-sm text-[#7b6532]">
+              En Premium podrás personalizar la reserva pública con color de
+              marca, mensaje del negocio y logo público para ofrecer una imagen
+              más cuidada y profesional.
             </p>
 
             <div className="mt-4">
               <Link
                 href="/cuenta/planes"
-                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
+                className="rounded-xl bg-[#a88718] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#967713]"
               >
-                Ver plan Premium Plus
+                Ver plan Premium
               </Link>
             </div>
           </div>
