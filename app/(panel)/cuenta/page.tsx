@@ -25,7 +25,7 @@ function formatPlanLabel(plan: string | null | undefined) {
   if (!normalized) return "Sin plan";
   if (normalized === "basic") return "Basic";
   if (normalized === "pro") return "Pro";
-  if (normalized === "premium") return "Premium";
+  if (normalized === "premium") return "Premium Plus";
 
   return plan ?? "Sin plan";
 }
@@ -1043,11 +1043,11 @@ export default async function CuentaPage() {
           <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
             <div className="mb-5">
               <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700">
-                Premium
+                Premium Plus
               </div>
 
               <h3 className="mt-4 text-xl font-semibold text-violet-900">
-                Personalización Premium
+                Personalización Premium Plus
               </h3>
               <p className="mt-1 text-sm text-violet-800">
                 Ajusta la imagen básica de tu reserva pública para que encaje
@@ -1161,7 +1161,7 @@ export default async function CuentaPage() {
                   type="submit"
                   className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
                 >
-                  Guardar personalización Premium
+                  Guardar personalización Premium Plus
                 </button>
 
                 {publicBookingUrl ? (
@@ -1196,16 +1196,16 @@ export default async function CuentaPage() {
         ) : (
           <div className="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm">
             <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700">
-              Premium
+              Premium Plus
             </div>
 
             <h3 className="mt-4 text-xl font-semibold text-violet-900">
-              Personalización Premium
+              Personalización Premium Plus
             </h3>
             <p className="mt-2 text-sm text-violet-800">
-              En Premium podrás personalizar la reserva pública con color de
-              marca, mensaje del negocio y logo público para ofrecer una imagen
-              más cuidada y profesional.
+              En Premium Plus podrás personalizar la reserva pública con color
+              de marca, mensaje del negocio y logo público para ofrecer una
+              imagen más cuidada y profesional.
             </p>
 
             <div className="mt-4">
@@ -1213,7 +1213,7 @@ export default async function CuentaPage() {
                 href="/cuenta/planes"
                 className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90"
               >
-                Ver plan Premium
+                Ver plan Premium Plus
               </Link>
             </div>
           </div>
