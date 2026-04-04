@@ -74,7 +74,7 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "premium",
-    badge: "Premium",
+    badge: "Premium Plus",
     title: "Escalar",
     priceLabel: "69 €/mes",
     employeesLabel: "Hasta 10 empleados activos",
@@ -82,7 +82,7 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
       "La opción más completa para negocios con una operativa más potente, una imagen más cuidada y margen real para escalar.",
     features: [
       "Todo lo de Pro",
-      "Personalización Premium",
+      "Personalización Premium Plus",
       "Mayor capacidad operativa",
       "Preparado para integraciones y crecimiento",
     ],
@@ -120,7 +120,7 @@ function formatPlanLabel(plan: string | null | undefined) {
 
   if (planKey === "basic") return "Basic";
   if (planKey === "pro") return "Pro";
-  return "Premium";
+  return "Premium Plus";
 }
 
 function formatStatusLabel(status: string | null | undefined) {
@@ -185,7 +185,7 @@ function getStatusClasses(status: string | null | undefined) {
 function getActionLabel(planKey: PlanKey) {
   if (planKey === "basic") return "Empezar con Basic";
   if (planKey === "pro") return "Pasar a Pro";
-  return "Pasar a Premium";
+  return "Pasar a Premium Plus";
 }
 
 function buildPlanActionState(params: {
@@ -356,7 +356,9 @@ export default async function PlanesPage() {
             </div>
 
             <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
-              <p className="text-sm font-medium text-violet-700">Premium</p>
+              <p className="text-sm font-medium text-violet-700">
+                Premium Plus
+              </p>
               <p className="mt-2 text-lg font-semibold text-violet-950">
                 Hasta 10 empleados
               </p>
@@ -471,8 +473,9 @@ export default async function PlanesPage() {
               Método de cobro pensado para crecer
             </h3>
             <p className="mt-2 text-sm leading-7 text-emerald-800">
-              La idea es mantener un precio base claro por plan y, en Premium,
-              ampliar capacidad cuando el salón supere los 10 empleados activos.
+              La idea es mantener un precio base claro por plan y, en Premium
+              Plus, ampliar capacidad cuando el salón supere los 10 empleados
+              activos.
             </p>
           </div>
 
