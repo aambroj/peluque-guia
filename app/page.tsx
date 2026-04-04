@@ -294,11 +294,11 @@ export default function HomePage() {
             </div>
 
             <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight text-[#2f2430] sm:text-5xl lg:text-6xl">
-              Software para peluquerías. Gestiona tu salón desde un solo panel.
+              Software para peluquerías y centros de estética. Gestiona tu salón desde un solo panel.
             </h1>
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-[#6d5b64] sm:text-lg">
-              PeluqueGuía es un software web para peluquerías que te ayuda a
+              PeluqueGuía es un software web para peluquerías y centros de estética que te ayuda a
               organizar reservas, clientes, equipo, servicios y reserva online
               desde un solo panel. Menos improvisación, mejor imagen y una
               operativa mucho más ordenada.
