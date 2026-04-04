@@ -191,6 +191,7 @@ function getPlanClasses(tone: string) {
       extraCard: "border-slate-200 bg-slate-50",
       extraTitle: "text-slate-800",
       extraText: "text-slate-700",
+      extraBadge: "border-slate-300 bg-white text-slate-700",
     };
   }
 
@@ -202,9 +203,12 @@ function getPlanClasses(tone: string) {
       text: "text-[#6d5a2b]",
       button:
         "bg-gradient-to-r from-[#8b6a16] to-[#b18b2c] text-white shadow-lg shadow-[#8b6a16]/15 hover:opacity-95",
-      extraCard: "border-[#e3c96f] bg-[linear-gradient(180deg,rgba(255,249,226,0.95),rgba(247,233,177,0.92))]",
-      extraTitle: "text-[#7a5700]",
-      extraText: "text-[#8b650a]",
+      extraCard:
+        "border-[#c99a37] bg-[linear-gradient(180deg,rgba(255,243,203,0.98),rgba(240,217,148,0.98))]",
+      extraTitle: "text-[#6a4a09]",
+      extraText: "text-[#6f5315]",
+      extraBadge:
+        "border-[#7a5a16] bg-[#6f5a22]/95 text-white shadow-sm shadow-[#6f5a22]/15",
     };
   }
 
@@ -218,6 +222,7 @@ function getPlanClasses(tone: string) {
     extraCard: "border-amber-200 bg-amber-50",
     extraTitle: "text-amber-900",
     extraText: "text-amber-800",
+    extraBadge: "border-amber-300 bg-white text-amber-900",
   };
 }
 
@@ -558,7 +563,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="planes" className="bg-[linear-gradient(180deg,#fffaf7_0%,#fcf4f6_100%)]">
+      <section
+        id="planes"
+        className="bg-[linear-gradient(180deg,#fffaf7_0%,#fcf4f6_100%)]"
+      >
         <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-[#7a6870]">
@@ -622,11 +630,26 @@ export default function HomePage() {
                   </ul>
 
                   {plan.extra ? (
-                    <div className={`mt-5 rounded-2xl border p-4 ${styles.extraCard}`}>
-                      <p className={`text-sm font-medium ${styles.extraTitle}`}>
-                        Escalado del plan
-                      </p>
-                      <p className={`mt-2 text-sm leading-6 ${styles.extraText}`}>
+                    <div
+                      className={`mt-5 rounded-2xl border p-4 ${styles.extraCard}`}
+                    >
+                      {plan.tone === "gold" ? (
+                        <span
+                          className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${styles.extraBadge}`}
+                        >
+                          Premium Plus
+                        </span>
+                      ) : (
+                        <p className={`text-sm font-medium ${styles.extraTitle}`}>
+                          Extra del plan
+                        </p>
+                      )}
+
+                      <p
+                        className={`text-sm leading-6 ${styles.extraText} ${
+                          plan.tone === "gold" ? "mt-4" : "mt-2"
+                        }`}
+                      >
                         {plan.extra}
                       </p>
                     </div>
